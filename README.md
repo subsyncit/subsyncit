@@ -194,7 +194,7 @@ You get prompted for you subversion password, when it launches.
 
 ## Running the functional tests
 
-Tests can only run these on the same server as the Subsyncit install, it is runs subversion admin operations, too.
+Tests can only run these on the same server as the Subversion and Apache installs, it is runs subversion admin operations, too.
 
 You'll already have setup the Subversion+Apache server (as above).
 
@@ -217,15 +217,3 @@ different of course.
 
 The tests, when running, delete and recreate the `functionalTests` folder on the subversion server, and implement the subversion `fsfs.conf` settings
 changes, as detailed above. That is why they need to be run as `sudo`.
-
-## Running performance tests on multiple Subversion server installation permutations
-
-In the subsyncit checkout directory (on the server), run:
-
-```
-sudo python perf_test_of_server_configuration.py.py <URL> <user> <root-of-repo-in-filesystem>
-
-```
-
-This creates and updates a file in <URL>/perfTests/ as a way of testing how good Subversion is at receiving PUTs
-via curl for various configurations of Subversion.  It does not test Subsyncit itself.

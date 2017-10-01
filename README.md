@@ -207,7 +207,7 @@ pip install sh glob2 requests
 In the checkout directory, run:
 
 ```
-sudo python functional_test_of_sync_operations.py <URL> <user> <root-of-repo-in-filesystem> <size-of-big-file>
+sudo python functional_test_of_sync_operations.py all <URL> <user> <root-of-repo-in-filesystem> <size-of-big-file>
 
 ```
 
@@ -217,3 +217,5 @@ different of course.
 
 The tests, when running, delete and recreate the `functionalTests` folder on the subversion server, and implement the subversion `fsfs.conf` settings
 changes, as detailed above. That is why they need to be run as `sudo`.
+
+You can change `all` to the name of a single test method to run, if you want to focus on one test.

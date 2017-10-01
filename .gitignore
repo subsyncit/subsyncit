@@ -1,0 +1,14 @@
+bin
+lib
+include
+.Python
+pip-selfcheck.json
+.idea
+*.pyc
+functionalTests*
+unitTests*
+perfTests*
+runit.sh
+.DS_Store
+testBigRandomFile*
+.cache/

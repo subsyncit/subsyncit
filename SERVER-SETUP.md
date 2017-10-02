@@ -66,21 +66,22 @@ You will be prompted to choose a password. Also change `-c` to `-m` for second a
 ## Optional Subversion settings
 
 If you are storing large binary files (> 100MB), you may need to change some settings for the Subversion repo too.
-Specifically in `<svn_root>/db/fsfs.conf` on the server:
+Specifically in `<svn_root>/db/fsfs.conf` on the server.
+
+Subversion attempts to align storage with 'deltas' of changes. A large 15GB AVI
+file that you changed the resolution of, will have EVERY BYTE different. Therefore
+attempting to look for deltas is pointless. If that is your file type, and
+changes like that are real, turn off delta-walking, by making the pertinent line like so:
+
 
 ```
-# Subversion attempts to align storage with 'deltas' of changes. A large 15G avi
-# file that you changed the resolution of, will have EVERY BYTE different. Therefore
-# attempting to look for deltas is pointless. If that is your file type, and
-# changes like that are real, turn off delta-walking, by making the pertinent line
-# like so:
-
 max-deltification-walk = 0
+```
 
-# The compression for large binaries kills performance for changes being pushed
-# to the server. Turn it off for all file types, by making the pertinent line
-# like so:
+The compression for large binaries kills performance for changes being pushed
+to the server. Turn it off for all file types, by making the pertinent line like so:
 
+```
 compression-level = 0
 ```
 

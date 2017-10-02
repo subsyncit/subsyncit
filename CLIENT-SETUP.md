@@ -14,10 +14,8 @@ python2 subsyncit.py <url-of-subversion-root> <path-to-local-directory-we-want-t
 
 You will be prompted for the applicable's user's password.
 
-Optional parameters:
+### Optional parameters
 
 * `--passwd` to supply the password on the command line (plain text) instead of prompting for secure entry
 * `--no-verify-ssl-cert` to ignore certificate errors if you have a self-signed (say for testing)
 * `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
-
-When it launches, you get prompted for you subversion password.

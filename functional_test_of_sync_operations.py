@@ -105,12 +105,6 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
             self.end(p2, FunctionalTestOfSyncOperations.testSyncDir2)
 
 
-    # def dtest_a_changed_file_syncs_back2(self):
-    #     self.test_a_changed_file_syncs_back()
-    #
-    # def dtest_a_changed_file_syncs_back3(self):
-    #     self.test_a_changed_file_syncs_back()
-
     @timedtest
     def test_a_changed_file_syncs_back(self):
 
@@ -236,6 +230,31 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
         finally:
             self.end(p1, FunctionalTestOfSyncOperations.testSyncDir1)
             self.end(p2, FunctionalTestOfSyncOperations.testSyncDir2)
+
+
+    @timedtest
+    def test_a_file_in_dir_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
+
+
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+
+        fred_ = self.svn_repo + self.rel_dir_1 + "fred/"
+        print "fred==" + fred_
+        self.expect201(requests.request('MKCOL',
+                                        fred_,
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "fred/output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
+
+        try:
+            op1 = FunctionalTestOfSyncOperations.testSyncDir1 + "fred/output.txt"
+            self.wait_for_file_to_appear(op1)
+        finally:
+            self.end(p1, FunctionalTestOfSyncOperations.testSyncDir1)
 
 
     @timedtest

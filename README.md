@@ -61,6 +61,6 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 
 # Further Reading
 
-1. [Server setup](blob/master/SERVER-SETUP.md)
-2. [Client setup](blob/master/CLIENT-SETUP.md)
-3. [Developing](blob/master/DEVELOPING.md)
+1. [Server setup](SERVER-SETUP.md)
+2. [Client setup](CLIENT-SETUP.md)
+3. [Developing](DEVELOPING.md)

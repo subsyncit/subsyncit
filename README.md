@@ -5,6 +5,10 @@ A File sync client that uses a Subversion repo as the backing-store, with no oth
 It's been tested with files of random bytes up to 12GB in size. It has also been with repo sizes
 up to 3.4TB (history, not the amount of files at HEAD revision, but that should work too).
 
+## Releases
+
+There have not been any releases yet, but Subsyncit certainly works if you've checked it out and launched it from the command line
+
 # Overview
 
 ## Glossary

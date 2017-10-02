@@ -487,7 +487,6 @@ def write_error(abs_local_file_path, msg):
 
 
 def sleep_a_little(sleep_secs):
-    # print("Main thread sleeping " + str(sleep_secs) + " secs ..")
     time.sleep(sleep_secs)
 
 

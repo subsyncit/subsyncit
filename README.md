@@ -8,7 +8,11 @@ up to 3.4TB (history, not the amount of files at HEAD revision, but that should 
 You would use this if:
 
 * you want a file-sync solution with strong versioning.
-* you prefer to deploy your own server storage (cloud or other)
+* you prefer to deploy your own server storage (public cloud, on-prem, in-home, containers)
+
+Fun fact: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
+trees [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
+[3](https://paulhammant.com/2017/09/28/choosing-between-blockchains-and-vanilla-merkle-trees/).
 
 ## Releases
 

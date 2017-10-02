@@ -319,7 +319,7 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
 
         filename = str(sh.pwd()).strip('\n') + "/testBigRandomFile"
         start = time.time()
-        self.make_a_1gig_random_file(filename, start, self.size)
+        self.make_a_big_random_file(filename, start, self.size)
 
         sz = os.stat(filename).st_size
         self.upload_file(filename, self.svn_repo + "functionalTests/testBigRandomFile")
@@ -340,7 +340,7 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
 
             self.list_files(FunctionalTestOfSyncOperations.testSyncDir1)
 
-            self.make_a_1gig_random_file(filename, start, self.size)
+            self.make_a_big_random_file(filename, start, self.size)
 
             self.list_files(FunctionalTestOfSyncOperations.testSyncDir1)
 
@@ -378,7 +378,7 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
         clash_file = glob2.glob(FunctionalTestOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
         self.assertEquals(os.stat(clash_file).st_size, aborted_get_size)
 
-    def make_a_1gig_random_file(self, filename, start, size):
+    def make_a_big_random_file(self, filename, start, size):
         print "Making " + size + "MB random file ... "
         sh.bash("./make_a_so_big_file.sh", filename, size)
         print " ... secs: " + str(round(time.time() - start, 1))

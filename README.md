@@ -50,19 +50,20 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 ## Working so far:
 
 1. Two-way syncing of add/changes/deletes, including directories, and timer based polling of remote Subversion repo for changes over time.
-2. Deliberate 'quiet time' after a local change detected, in in order to not push a a partially complete file write to the remote Subversion repo.
+2. Deliberate 'quiet time' after a local change detected, in in order to not push a partially complete file-write to the remote Subversion repo.
 3. Fallback mechanism to detect local sync directory adds/changes/deletes that were not detected or pushed previously.
-4. Clash detection using sha1 - the server always wins, the local changed version is renamed out the way.
-5. Ability to reject an incompatible web server - it silently just tries again later (needs work)
-6. Standard exclusions via file suffix
+4. Clash detection using `sha1` - the server always wins, the local changed version is renamed out the way.
+5. Ability to reject an incompatible web server - it silently just tries again later (needs work).
+6. Standard exclusions via file suffix.
 
 ## Yet to develop / needs work
 
 1. UI for prompting user's Subversion id/password.
 2. Tray/task bar icon/status.
-3. Multiple sync directories (more than one server URL)
-4. Directory mask (globbing includes/excludes) per user
-5. Percolation of read-only bits for situations when the end user if not permitted to PUT a file back if the change it. (Rasied with the Subversion dev team: [SVN-4691](https://issues.apache.org/jira/browse/SVN-4691))
+3. Multiple sync directories (more than one server URL).
+4. Directory mask (globbing includes/excludes) per user.
+5. Percolation of read-only bits for situations when the end user if not permitted to PUT a file back if the change it. (Rasied with the Subversion dev team: [SVN-4691](https://issues.apache.org/jira/browse/SVN-4691)).
+6. Hidden unzipping of MS Office documents on the server side. [I've mulled this before](https://paulhammant.com/2014/10/28/corporate-file-sync-agony-and-ecstasy#vcs-systems-should-be-the-backends-for-file-sync)
 
 # Further Reading
 

@@ -86,7 +86,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or self.get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_suffixes:
             return
         # print "Q:ADD-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
@@ -97,7 +97,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or self.get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_suffixes:
             return
         # print "Q:DEL-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
@@ -108,19 +108,21 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or self.get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_suffixes:
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
             # print "Q:CHG-" + event.src_path
             self.local_adds_chgs_deletes_queue.put((
                 get_relative_file_name(event.src_path, self.absolute_local_root_path), "change"))
 
-    def get_suffix(self, relative_file_name):
-        file_name, extension = splitext(relative_file_name)
-        return extension
 
     def update_excluded_suffixes(self, excluded_suffixes):
         self.excluded_suffixes = excluded_suffixes
+
+
+def get_suffix(relative_file_name):
+    file_name, extension = splitext(relative_file_name)
+    return extension
 
 
 def make_remote_subversion_directory_for(relative_file_name, remote_subversion_repo_url, user, passwd, verifySetting):
@@ -154,11 +156,13 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
             return ""
         return output
 
-def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path):
+def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path, excluded_suffixes):
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
-        if relative_file_name.startswith(".") or len(relative_file_name) == 0:
+        if relative_file_name.startswith(".") \
+                or get_suffix(relative_file_name) in excluded_suffixes \
+                or len(relative_file_name) == 0:
             continue
         dir_or_file = "dir" if sha1 is None else "file"
         File = Query()
@@ -659,11 +663,13 @@ def main(argv):
         while keep_going(file_system_watcher, args.absolute_local_root_path):
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = get_remote_subversion_repo_revision_for(args.remote_subversion_repo_url, args.user, passwd, "", args.absolute_local_root_path, verifySetting) # root
             if root_revision_on_remote_svn_repo != -1:
+                excluded_suffixes = []
                 if iteration == 0: # At boot time only for now
-                    notification_handler.update_excluded_suffixes(get_excluded_suffixes(args.remote_subversion_repo_url, args.user, passwd, verifySetting))
+                    excluded_suffixes = get_excluded_suffixes(args.remote_subversion_repo_url, args.user, passwd, verifySetting)
+                    notification_handler.update_excluded_suffixes(excluded_suffixes)
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(args.remote_subversion_repo_url, baseline_relative_path, args.user, passwd, verifySetting)
-                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path)
+                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path, excluded_suffixes)
                     sync_remote_adds_and_changes_to_local(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
                     sync_remote_deletes_to_local(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)

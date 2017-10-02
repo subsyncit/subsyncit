@@ -235,7 +235,6 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_a_file_in_dir_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
 
-
         self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
                                         auth=(self.user, self.passwd),
                                         verify=False))
@@ -256,8 +255,35 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
 
 
     @timedtest
-    def test_a_file_in_dir_with_spaces_in_names_are_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
+    def test_that_excluded_suffixes_work(self):
 
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-suffixes", auth=(self.user, self.passwd), data=".foo\n.txt\n.bar", verify=False))
+
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.zzz", auth=(self.user, self.passwd), data="Hello", verify=False))
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
+
+        try:
+
+            op1 = FunctionalTestOfSyncOperations.testSyncDir1 + "output.zzz"
+            self.wait_for_file_to_appear(op1)
+
+            op1 = FunctionalTestOfSyncOperations.testSyncDir1 + "output.txt"
+            time.sleep(5) # the two files should arrive pretty much at the same time, but why not wait 5 secs, heh?
+            if os.path.exists(op1):
+                self.fail("File " + op1 + " should not have appeared but did.")
+        finally:
+            self.end(p1, FunctionalTestOfSyncOperations.testSyncDir1)
+
+
+    @timedtest
+    def test_a_file_in_dir_with_spaces_in_names_are_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
 
         self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
                                         auth=(self.user, self.passwd),

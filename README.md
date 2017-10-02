@@ -10,8 +10,8 @@ You would use this if:
 * you want a file-sync solution with strong versioning.
 * you prefer to deploy your own server storage (public cloud, on-prem, in-home, containers)
 
-Fun fact: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
-trees [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
+**Fun fact**: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
+trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
 [3](https://paulhammant.com/2017/09/28/choosing-between-blockchains-and-vanilla-merkle-trees/).
 
 ## Releases

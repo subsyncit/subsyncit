@@ -63,7 +63,7 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 3. Multiple sync directories (more than one server URL).
 4. Directory mask (globbing includes/excludes) per user.
 5. Percolation of read-only bits for situations when the end user if not permitted to PUT a file back if the change it. (Rasied with the Subversion dev team: [SVN-4691](https://issues.apache.org/jira/browse/SVN-4691)).
-6. Hidden unzipping of MS Office documents on the server side. [I've mulled this before](https://paulhammant.com/2014/10/28/corporate-file-sync-agony-and-ecstasy#vcs-systems-should-be-the-backends-for-file-sync)
+6. Hidden unzipping of MS Office documents on the server side. [I've mulled this before](https://paulhammant.com/2014/10/28/corporate-file-sync-agony-and-ecstasy#vcs-systems-should-be-the-backends-for-file-sync) and [discussed it with the Subversion team](https://groups.google.com/forum/#!topic/subversion-development/YE0F0nYlR-U), but will have to implement it client side.
 
 # Further Reading
 

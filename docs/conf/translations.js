@@ -2,7 +2,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
         'TAGLINE': 'File sync for the office or home that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues or family members',
-        'FOOTER': '&copy; 2017 <b>Paul Hammant</b>. All Rights Reserved',
+        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'There are lots of features',
         'LIST': 'Here is a handy list!',
@@ -26,13 +26,13 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'TESTIMONIAL_1': 'I have been using this for a year and love it. It is just what I have always wanted',
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
-        'PH_WIFE': 'Paul&apos;s wife',
-        'GH': 'The app is open source on GitHub (of course)'
+        'PH_FRIEND': 'Paul&apos;s friend',
+        'GH': 'is open source on GitHub (of course)'
     });
 
     $translateProvider.translations('es', {
         'TAGLINE': 'File sync for the office or home that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues or family members',
-        'FOOTER': '&copy; 2017 <b>Paul Hammant</b>. All Rights Reserved',
+        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'There are lots of features',
         'LIST': 'Here is a handy list!',
@@ -53,11 +53,11 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'EXCLUDES': 'Files can be excluded from sync operations via their suffix',
         'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
         'TESTIMONIALS': 'Testimonials from those using it',
-        'TESTIMONIAL_1': 'I love this thing - it is just what I have always wanted',
+        'TESTIMONIAL_1': 'I have been using this for a year and love it. It is just what I have always wanted',
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
-        'PH_WIFE': 'Paul&apos;s wife',
-        'GH': 'The app is open source on GitHub (of course)'
+        'PH_FRIEND': 'Paul&apos;s friend',
+        'GH': 'is open source on GitHub (of course)'
     });
 
     var userLang = navigator.language || navigator.userLanguage;

@@ -23,7 +23,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'EXCLUDES': 'Files can be excluded from sync operations via their suffix',
         'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
         'TESTIMONIALS': 'Testimonials from those using it',
-        'TESTIMONIAL_1': 'I love this thing - it is just what I have always wanted',
+        'TESTIMONIAL_1': 'I have been using this for a year and love it. It is just what I have always wanted',
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_WIFE': 'Paul&apos;s wife',

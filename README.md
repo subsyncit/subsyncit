@@ -1,14 +1,15 @@
 # Subsyncit
 
-A File sync client that uses a Subversion repo as the backing-store, with no other server-side install. It is written in Python.
+A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server).
+It is written in Python, works on Windows, Mac and Linux, and does not depend on a Subversion install on the client.
 
-It's been tested with files of random bytes up to 12GB in size. It has also been with repo sizes
-up to 3.4TB (history, not the amount of files at HEAD revision, but that should work too).
+It has been tested with files of random bytes up to 12GB in size. It has also been tested with Subversion repo holding
+3.4TB of history.
 
 You would use this if:
 
 * you want a file-sync solution with strong versioning.
-* you prefer to deploy your own server storage (public cloud, on-prem, in-home, containers)
+* you prefer to deploy your own server storage (public cloud, on-prem, in-home, SBCs, containers)
 
 **Fun fact**: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
 trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
@@ -18,14 +19,14 @@ trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures
 
 There have not been any releases yet, but Subsyncit certainly works if you've checked it out and launched it from the command line
 
-# Overview
-
-## Glossary
+# Glossary
 
 * Client - a workstation, laptop or mobile device.
-* Server - a computer on which a suitable Subversion is installed (Mod_Web_Dav, SVNAutoversioning on).
+* Server - a computer on which a suitable Subversion is installed (Mod_Web_Dav, SVNAutoversioning and others on).
 * Remote Subversion Repository (or repo) - on the server, a configuration of subversion that can take commits for so-authorized people.
 * Local Sync Directory - on the client a single directory, the contents for which will synchronized up and down to the remote Subversion repo.
+
+# Overview
 
 ## Features in common with all file-sync technologies:
 
@@ -51,7 +52,7 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 1. Two-way syncing of add/changes/deletes, including directories, and timer based polling of remote Subversion repo for changes over time.
 2. Deliberate 'quiet time' after a local change detected, in in order to not push a a partially complete file write to the remote Subversion repo.
 3. Fallback mechanism to detect local sync directory adds/changes/deletes that were not detected or pushed previously.
-4. Clash detection using sha1 - server always wins, the local changed version is renamed out the way.
+4. Clash detection using sha1 - the server always wins, the local changed version is renamed out the way.
 5. Ability to reject an incompatible web server - it silently just tries again later (needs work)
 6. Standard exclusions via file suffix
 

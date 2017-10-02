@@ -60,9 +60,9 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 
 1. UI for prompting user's Subversion id/password.
 2. Tray/task bar icon/status.
-3. Multiple directories
-4. Directory mask (globbing) per user
-5. Incomplete downloads are completed by handles as a clash present (renamed out the way)
+3. Multiple sync directories (more than one server URL)
+4. Directory mask (globbing includes/excludes) per user
+5. Percolation of read-only bits for situations when the end user if not permitted to PUT a file back if the change it. (Rasied with the Subversion dev team: [SVN-4691](https://issues.apache.org/jira/browse/SVN-4691))
 
 # Further Reading
 

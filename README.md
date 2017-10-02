@@ -5,6 +5,11 @@ A File sync client that uses a Subversion repo as the backing-store, with no oth
 It's been tested with files of random bytes up to 12GB in size. It has also been with repo sizes
 up to 3.4TB (history, not the amount of files at HEAD revision, but that should work too).
 
+You would use this if:
+
+* you want a file-sync solution with strong versioning.
+* you prefer to deploy your own server storage (cloud or other)
+
 ## Releases
 
 There have not been any releases yet, but Subsyncit certainly works if you've checked it out and launched it from the command line
@@ -118,11 +123,6 @@ These need to be added to the Subversion block inside httpd.conf (Bitnami locati
   require valid-user
   # Etc
 </Location>
-
-AuthType Basic
-AuthName "Subversion repository"
-AuthUserFile /opt/bitnami/repository/users
-require valid-user
 ```
 
 Here is the perl oneliner to do that (Bitnami location of httpd.conf shown):

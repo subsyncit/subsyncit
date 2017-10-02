@@ -154,29 +154,29 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
             return ""
         return output
 
-def enque_gets_and_local_deletes(db, all_entries, absolute_local_root_path):
+def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path):
     File = Query()
-    db.update({'instruction': 'QUESTION'}, File.instruction == None)
+    files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
         if relative_file_name.startswith(".") or len(relative_file_name) == 0:
             continue
         dir_or_file = "dir" if sha1 is None else "file"
         File = Query()
-        rows = db.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+        rows = files_table.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
         if len(rows) > 0:
             if rows[0]['repoRev'] != rev:
-                update_instruction_in_table(db, "GET", relative_file_name)
+                update_instruction_in_table(files_table, "GET", relative_file_name)
 #               else:
             else:
                 localSha1 = calculate_sha1_from_local_file(absolute_local_root_path + relative_file_name.replace(os.sep, "/"))
                 if rows[0]['localSha1'] == localSha1:
-                    update_instruction_in_table(db, None, relative_file_name)
+                    update_instruction_in_table(files_table, None, relative_file_name)
                 else:
-                    update_instruction_in_table(db, "PUT", relative_file_name)
+                    update_instruction_in_table(files_table, "PUT", relative_file_name)
         else:
-            upsert_row_in_table(db, relative_file_name, rev, dir_or_file, instruction="GET")
+            upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
     File = Query()
-    db.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
+    files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
 
 
 def extract_name_type_rev(entry_xml_element):
@@ -186,9 +186,9 @@ def extract_name_type_rev(entry_xml_element):
     return file_or_dir, relative_file_name, rev
 
 
-def sync_remote_adds_and_changes_to_local(db, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):
+def sync_remote_adds_and_changes_to_local(files_table, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):
     File = Query()
-    rows = db.search(File.instruction == "GET")
+    rows = files_table.search(File.instruction == "GET")
     for row in rows:
         relative_file_name = row['relativeFileName']
         is_file = row['isFile']
@@ -203,7 +203,7 @@ def sync_remote_adds_and_changes_to_local(db, remote_subversion_repo_url, user, 
             if not os.path.exists(abs_local_file_path):
                 os.makedirs(abs_local_file_path)
                 # print "get cycle dir? "
-                update_row_shas(db, relative_file_name, None)
+                update_row_shas(files_table, relative_file_name, None)
         else:
             (repoRev, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, passwd, relative_file_name, abs_local_file_path, verifySetting)
 
@@ -215,7 +215,7 @@ def sync_remote_adds_and_changes_to_local(db, remote_subversion_repo_url, user, 
 
             if os.path.exists(abs_local_file_path):
                 local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                print_rows(db)
+                print_rows(files_table)
                 if local_sha1 != old_sha1_should_be:
                     os.rename(abs_local_file_path,
                               abs_local_file_path + ".clash_" + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
@@ -225,78 +225,78 @@ def sync_remote_adds_and_changes_to_local(db, remote_subversion_repo_url, user, 
                         f.write(chunk)
             sha1 = calculate_sha1_from_local_file(abs_local_file_path)
             # print "get cycle " + absolute_local_root_path + "-" + sha1
-            update_row_shas(db, relative_file_name, sha1)
-            update_row_revision(db, relative_file_name, repoRev)
-        update_instruction_in_table(db, None, relative_file_name)
-        # print "end_of_sync" + prt_db_for(db, relative_file_name)
+            update_row_shas(files_table, relative_file_name, sha1)
+            update_row_revision(files_table, relative_file_name, repoRev)
+        update_instruction_in_table(files_table, None, relative_file_name)
+        # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
 
 
-def sync_remote_deletes_to_local(db, absolute_local_root_path):
+def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
 
     File = Query()
-    rows = db.search(File.instruction == 'DELETE LOCALLY')
+    rows = files_table.search(File.instruction == 'DELETE LOCALLY')
 
     for row in rows:
-        delete_file_and_entries_in_table(db, row['relativeFileName'], absolute_local_root_path, False if row['isFile'] == 1 else True)
+        delete_file_and_entries_in_table(files_table, row['relativeFileName'], absolute_local_root_path, False if row['isFile'] == 1 else True)
 
 
-def update_row_shas(db, relative_file_name, sha1):
+def update_row_shas(files_table, relative_file_name, sha1):
     File = Query()
-    foo = db.update({'remoteSha1': sha1, 'localSha1': sha1}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
-    # print "update_row_shas: " + str(foo) + "-" + relative_file_name + "-" + sha1 + "-" + prt_db_for(db, relative_file_name)
+    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+    # print "update_row_shas: " + str(foo) + "-" + relative_file_name + "-" + sha1 + "-" + prt_files_table_for(files_table, relative_file_name)
 
 
-def prt_db_for(db, relative_file_name):
-    return str(db.search(Query().relativeFileName == relative_file_name.replace(os.sep, "/")))
+def prt_files_table_for(files_table, relative_file_name):
+    return str(files_table.search(Query().relativeFileName == relative_file_name.replace(os.sep, "/")))
 
 
-def update_row_revision(db, relative_file_name, rev=-1):
+def update_row_revision(files_table, relative_file_name, rev=-1):
     File = Query()
-    db.update({'repoRev': rev}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+    files_table.update({'repoRev': rev}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
 
 
-def upsert_row_in_table(db, relative_file_name, rev, file_or_dir, instruction):
+def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
 
     File = Query()
-    # print "upsert1" + prt_db_for(db, relative_file_name)
-    if len(db.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))) == 0:
-        db.insert({'relativeFileName': relative_file_name.replace(os.sep, "/"),
+    # print "upsert1" + prt_files_table_for(files_table, relative_file_name)
+    if len(files_table.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))) == 0:
+        files_table.insert({'relativeFileName': relative_file_name.replace(os.sep, "/"),
                    'isFile': ("1" if file_or_dir == "file" else "0"),
                    'remoteSha1': None,
                    'localSha1': None,
                    'repoRev': rev})
 
     if instruction is not None:
-        update_instruction_in_table(db, instruction, relative_file_name)
+        update_instruction_in_table(files_table, instruction, relative_file_name)
 
-    # print "upsert2" + prt_db_for(db, relative_file_name)
+    # print "upsert2" + prt_files_table_for(files_table, relative_file_name)
 
 
-def update_instruction_in_table(db, instruction, relative_file_name):
+def update_instruction_in_table(files_table, instruction, relative_file_name):
     if instruction is not None and instruction == "DELETE":
 
         File = Query()
-        db.update({'instruction': instruction}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+        files_table.update({'instruction': instruction}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
 
         # TODO LIKE
 
     else:
 
         File = Query()
-        db.update({'instruction': instruction}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+        files_table.update({'instruction': instruction}, File.relativeFileName == relative_file_name.replace(os.sep, "/"))
 
 
-def delete_file_and_entries_in_table(db, relative_file_name, absolute_local_root_path, wildcard):
+def delete_file_and_entries_in_table(files_table, relative_file_name, absolute_local_root_path, wildcard):
 
     if wildcard:
         File = Query()
-        db.remove(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+        files_table.remove(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
 
         # TODO LIKE
 
     else:
         File = Query()
-        db.remove(File.relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name.replace(os.sep, "/")')))
+        files_table.remove(File.relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name.replace(os.sep, "/")')))
 
     name = (absolute_local_root_path + relative_file_name).replace("/", os.sep)
     try:
@@ -366,10 +366,10 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     return path
 
 
-def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(db, remote_subversion_repo_url, user, passwd, baseline_relative_path, absolute_local_root_path, verifySetting):
+def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(files_table, remote_subversion_repo_url, user, passwd, baseline_relative_path, absolute_local_root_path, verifySetting):
 
     File = Query()
-    rows = db.search(File.instruction == 'PUT')
+    rows = files_table.search(File.instruction == 'PUT')
 
     add_changes = 0
     for row in rows:
@@ -386,16 +386,16 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(db,
             add_changes += 1
             output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting)  # <h1>Created</h1>
             if "... still being written to" not in output:
-                update_sha_and_revision_for_row(db, fn, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
+                update_sha_and_revision_for_row(files_table, fn, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
             if not output == "":
                 print("Unexpected on_created output for " + fn + " = [" + str(output) + "]")
         if "... still being written to" not in output:
-            update_instruction_in_table(db, None, fn)
+            update_instruction_in_table(files_table, None, fn)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
 
 
-def update_sha_and_revision_for_row(db, relative_file_name, local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting):
+def update_sha_and_revision_for_row(files_table, relative_file_name, local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting):
     elements_for = svn_metadata_xml_elements_for(remote_subversion_repo_url + baseline_relative_path + relative_file_name, "", user, passwd, verifySetting)
     i = len(elements_for)
     if i > 1:
@@ -403,14 +403,14 @@ def update_sha_and_revision_for_row(db, relative_file_name, local_sha1, remote_s
     for relative_file_name, rev, sha1 in elements_for:
         if local_sha1 != sha1:
             print("SHA1s dont match when they should for " + relative_file_name + " " + str(sha1) + " " + local_sha1)
-        update_row_shas(db, relative_file_name, local_sha1)
-        update_row_revision(db, relative_file_name, rev)
+        update_row_shas(files_table, relative_file_name, local_sha1)
+        update_row_revision(files_table, relative_file_name, rev)
 
 
-def update_revisions_for_created_directories(db, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):
+def update_revisions_for_created_directories(files_table, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):
 
     File = Query()
-    rows = db.search(File.instruction == 'MKCOL')
+    rows = files_table.search(File.instruction == 'MKCOL')
 
     msg_done = False
     for row in rows:
@@ -418,14 +418,14 @@ def update_revisions_for_created_directories(db, remote_subversion_repo_url, use
             print("Getting Revisions for created dirs from Subversion")
             msg_done = True
         (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, passwd, row[0], absolute_local_root_path, verifySetting)
-        update_row_revision(db, row['relativeFileName'], rev=revn)
-        update_instruction_in_table(db, None, row['relativeFileName'])
+        update_row_revision(files_table, row['relativeFileName'], rev=revn)
+        update_instruction_in_table(files_table, None, row['relativeFileName'])
 
 
-def perform_deletes_on_remote_subversion_repo(db, remote_subversion_repo_url, user, passwd, verifySetting):
+def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_repo_url, user, passwd, verifySetting):
 
     File = Query()
-    rows = db.search(File.instruction == 'DELETE ON REMOTE')
+    rows = files_table.search(File.instruction == 'DELETE ON REMOTE')
 
     deletes = 0
     for row in rows:
@@ -437,10 +437,10 @@ def perform_deletes_on_remote_subversion_repo(db, remote_subversion_repo_url, us
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
             File = Query()
-            db.remove(File.relativeFileName == row['relativeFileName'].replace(os.sep, "/"))
+            files_table.remove(File.relativeFileName == row['relativeFileName'].replace(os.sep, "/"))
         else:
             File = Query()
-            db.remove(File.relativeFileName == row['relativeFileName'].replace(os.sep, "/"))
+            files_table.remove(File.relativeFileName == row['relativeFileName'].replace(os.sep, "/"))
             # TODO LIKE
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
@@ -491,23 +491,23 @@ def sleep_a_little(sleep_secs):
     time.sleep(sleep_secs)
 
 
-def process_queued_local_sync_directory_adds_changes_and_deletes(db, local_adds_chgs_deletes_queue):
+def process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue):
     while not local_adds_chgs_deletes_queue.empty():
         (relative_file_name, action) = local_adds_chgs_deletes_queue.get()
         if action == "add_dir":
-            upsert_row_in_table(db, relative_file_name, "-1", "dir", instruction="MKCOL")
+            upsert_row_in_table(files_table, relative_file_name, "-1", "dir", instruction="MKCOL")
         elif action == "add_file":
-            in_subversion = file_is_in_subversion(db, relative_file_name)
+            in_subversion = file_is_in_subversion(files_table, relative_file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
-                upsert_row_in_table(db, relative_file_name, "-1", "file", instruction="PUT")
+                upsert_row_in_table(files_table, relative_file_name, "-1", "file", instruction="PUT")
         elif action == "change":
-            update_instruction_in_table(db, "PUT", relative_file_name)
+            update_instruction_in_table(files_table, "PUT", relative_file_name)
         elif action == "delete":
-            in_subversion = file_is_in_subversion(db, relative_file_name)
+            in_subversion = file_is_in_subversion(files_table, relative_file_name)
             # 'svn up' can delete a file, causing watchdog to trigger a delete notification .. to be ignored
             if in_subversion:
-                update_instruction_in_table(db, "DELETE ON REMOTE", relative_file_name)
+                update_instruction_in_table(files_table, "DELETE ON REMOTE", relative_file_name)
         else:
             raise Exception("Unknown action " + action)
 
@@ -516,32 +516,32 @@ def file_is_in_subversion(connection, relative_file_name):
     return instruction_for_file(connection, relative_file_name) is not None
 
 
-def instruction_for_file(db, relative_file_name):
+def instruction_for_file(files_table, relative_file_name):
     File = Query()
-    rows = db.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
+    rows = files_table.search(File.relativeFileName == relative_file_name.replace(os.sep, "/"))
 
     if len(rows) == 0:
         return None
     else:
         return rows[0]
 
-def print_rows(db):
-    db_all = db.all()
-    if len(db_all) > 0:
+def print_rows(files_table):
+    files_table_all = files_table.all()
+    if len(files_table_all) > 0:
         print("All Items, as per 'files' table:")
         print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, instruction")
-        for row in db_all:
+        for row in files_table_all:
             print("  " + row['relativeFileName'] + ", " + str(row['isFile']) + ", " + str(row['repoRev']) + ", " +
                   str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['instruction']))
 
 
-def enque_any_missed_adds_and_changes(db, local_adds_chgs_deletes_queue, absolute_local_root_path):
+def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
     for (dir, _, files) in os.walk(absolute_local_root_path):
         for f in files:
             path = os.path.join(dir, f)
             relative_file_name = get_relative_file_name(path, absolute_local_root_path).replace(os.sep, "/")
-            in_subversion = file_is_in_subversion(db, relative_file_name)
-            instruction = instruction_for_file(db, relative_file_name)
+            in_subversion = file_is_in_subversion(files_table, relative_file_name)
+            instruction = instruction_for_file(files_table, relative_file_name)
             path_exists = os.path.exists(path)
             if not relative_file_name.startswith(".") and ".clash_" not in relative_file_name:
                 if path_exists and not in_subversion:
@@ -551,8 +551,8 @@ def enque_any_missed_adds_and_changes(db, local_adds_chgs_deletes_queue, absolut
                     # if the SHA is unchanged.
                     local_adds_chgs_deletes_queue.put((relative_file_name, "change"))
 
-def enque_any_missed_deletes(db, local_adds_chgs_deletes_queue, absolute_local_root_path):
-    for row in db.all():
+def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
+    for row in files_table.all():
         if not os.path.exists(absolute_local_root_path + row['relativeFileName']):
             local_adds_chgs_deletes_queue.put((row['relativeFileName'], "delete"))
 
@@ -581,9 +581,8 @@ def get_excluded_suffixes(remote_subversion_repo_url, user, passwd, verifySettin
     except requests.exceptions.ConnectionError, e:
         return []
 
-# def main(remote_subversion_repo_url, absolute_local_root_path, user, crt, sleep_secs, passwd):
 def main(argv):
-    parser = argparse.ArgumentParser(description='Svn Shelve')
+    parser = argparse.ArgumentParser(description='Subsyncit client')
 
     parser.add_argument("remote_subversion_repo_url")
     parser.add_argument("absolute_local_root_path")
@@ -628,8 +627,9 @@ def main(argv):
         requests.packages.urllib3.disable_warnings()
         verifySetting = args.verify_ssl_cert
 
-    tinydb_path = args.absolute_local_root_path + ".subsyncit.tinydb"
+    tinydb_path = args.absolute_local_root_path + ".subsyncit.db"
     db = TinyDB(tinydb_path)
+    files_table  = db.table('files')
 
     local_adds_chgs_deletes_queue = Queue()
 
@@ -653,21 +653,21 @@ def main(argv):
                     notification_handler.update_excluded_suffixes(get_excluded_suffixes(args.remote_subversion_repo_url, args.user, passwd, verifySetting))
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(args.remote_subversion_repo_url, baseline_relative_path, args.user, passwd, verifySetting)
-                    enque_gets_and_local_deletes(db, all_entries, args.absolute_local_root_path)
-                    sync_remote_adds_and_changes_to_local(db, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
-                    sync_remote_deletes_to_local(db, args.absolute_local_root_path)
-                    update_revisions_for_created_directories(db, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
+                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path)
+                    sync_remote_adds_and_changes_to_local(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
+                    sync_remote_deletes_to_local(files_table, args.absolute_local_root_path)
+                    update_revisions_for_created_directories(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
                     last_root_revision = root_revision_on_remote_svn_repo
-                process_queued_local_sync_directory_adds_changes_and_deletes(db, local_adds_chgs_deletes_queue)
-                perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(db, args.remote_subversion_repo_url, args.user, passwd, baseline_relative_path, args.absolute_local_root_path, verifySetting)
-                perform_deletes_on_remote_subversion_repo(db, args.remote_subversion_repo_url, args.user, passwd, verifySetting)
+                process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue)
+                perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(files_table, args.remote_subversion_repo_url, args.user, passwd, baseline_relative_path, args.absolute_local_root_path, verifySetting)
+                perform_deletes_on_remote_subversion_repo(files_table, args.remote_subversion_repo_url, args.user, passwd, verifySetting)
                 # TODO calc right ?
                 if time.time() - last_missed_time > 60:
                     # This is 1) a fallback, in case the watchdog file watcher misses something
                     # And 2) a processor that's going to process additions to the local sync dir
                     # that may have happened when this daemon wasn't running.
-                    enque_any_missed_adds_and_changes(db, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                    enque_any_missed_deletes(db, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                     last_missed_time = time.time()
             sleep_a_little(args.sleep_secs)
             iteration += 1
@@ -683,7 +683,7 @@ def main(argv):
     debug = True
 
     if debug:
-        print_rows(db)
+        print_rows(files_table)
 
 
 def make_hidden_on_windows_too(path):
@@ -694,5 +694,4 @@ def make_hidden_on_windows_too(path):
 if __name__ == "__main__":
 
     main(sys.argv)
-#     main(sys.argv[1], sys.argv[2], sys.argv[3], str(sys.argv[4]).lower() in ("yes", "true", "t", "1"), float(sys.argv[5]), passwd)
     exit(0)

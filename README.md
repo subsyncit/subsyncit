@@ -5,6 +5,10 @@ A File sync client that uses a Subversion repo as the backing-store, with no oth
 It's been tested with files of random bytes up to 12GB in size. It has also been with repo sizes
 up to 3.4TB (history, not the amount of files at HEAD revision, but that should work too).
 
+## Releases
+
+There have not been any releases yet, but Subsyncit certainly works if you've checked it out and launched it from the command line
+
 # Overview
 
 ## Glossary
@@ -207,7 +211,7 @@ pip install sh glob2 requests
 In the checkout directory, run:
 
 ```
-sudo python functional_test_of_sync_operations.py <URL> <user> <root-of-repo-in-filesystem> <size-of-big-file>
+sudo python functional_test_of_sync_operations.py all <URL> <user> <root-of-repo-in-filesystem> <size-of-big-file>
 
 ```
 
@@ -217,3 +221,5 @@ different of course.
 
 The tests, when running, delete and recreate the `functionalTests` folder on the subversion server, and implement the subversion `fsfs.conf` settings
 changes, as detailed above. That is why they need to be run as `sudo`.
+
+You can change `all` to the name of a single test method to run, if you want to focus on one test.

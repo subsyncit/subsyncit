@@ -401,7 +401,7 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
 if __name__ == '__main__':
     import sys
 
-    test_name = sys.argv[1]
+    test_name = sys.argv[1].lower()
 
     svnrepo = sys.argv[2]
     user = sys.argv[3]
@@ -414,7 +414,7 @@ if __name__ == '__main__':
     test_names = test_loader.getTestCaseNames(FunctionalTestOfSyncOperations)
 
     suite = unittest.TestSuite()
-    if test_name == "ALL":
+    if test_name == "all":
         for tname in test_names:
             suite.addTest(FunctionalTestOfSyncOperations(tname, svnrepo, user, svnrepo_root, size, pword))
     else:

@@ -1,3 +1,5 @@
+Scroll to the bottom for Amazon Web Services, Google Cloud, office, and in-home Raspberry Pi (etc) server choices.
+
 # Server-side setup
 
 General requirement: a server with the following installed and setup:
@@ -61,7 +63,8 @@ Use `htpasswd` to create users.
 sudo htpasswd -c /path/to/authz_users_file <username>
 ```
 
-You will be prompted to choose a password. Also change `-c` to `-m` for second and subsequent invocations, as the former overwrites the file.
+You will be prompted to choose a password. Also change `-c` to `-m` for second and subsequent invocations,
+as the former overwrites the file.
 
 ## Optional Subversion settings
 

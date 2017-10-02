@@ -240,10 +240,8 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
                                         auth=(self.user, self.passwd),
                                         verify=False))
 
-        fred_ = self.svn_repo + self.rel_dir_1 + "fred/"
-        print "fred==" + fred_
         self.expect201(requests.request('MKCOL',
-                                        fred_,
+                                        self.svn_repo + self.rel_dir_1 + "fred/",
                                         auth=(self.user, self.passwd),
                                         verify=False))
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "fred/output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
@@ -252,6 +250,29 @@ class FunctionalTestOfSyncOperations(BaseSyncTest):
 
         try:
             op1 = FunctionalTestOfSyncOperations.testSyncDir1 + "fred/output.txt"
+            self.wait_for_file_to_appear(op1)
+        finally:
+            self.end(p1, FunctionalTestOfSyncOperations.testSyncDir1)
+
+
+    @timedtest
+    def test_a_file_in_dir_with_spaces_in_names_are_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
+
+
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+
+        self.expect201(requests.request('MKCOL',
+                                        self.svn_repo + self.rel_dir_1 + "f r e d/",
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "f r e d/o u t p u t.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
+
+        try:
+            op1 = FunctionalTestOfSyncOperations.testSyncDir1 + "f r e d/o u t p u t.txt"
             self.wait_for_file_to_appear(op1)
         finally:
             self.end(p1, FunctionalTestOfSyncOperations.testSyncDir1)

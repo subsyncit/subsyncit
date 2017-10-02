@@ -1,8 +1,12 @@
 # Server-side setup
 
-A Subversion server with mod_dav_svn (and Apache2) activated.
+General requirement: a server with the following installed and setup:
 
-## Apache2 settings
+* Subversion
+* Apache2
+* mod_dav_svn
+
+# Non-standard Apache2 settings
 
 These are the settings you'll need ADD to change in Apache's .conf file to allow Subsyncit modes of operation:
 
@@ -16,7 +20,7 @@ These are the settings you'll need ADD to change in Apache's .conf file to allow
 </Location>
 ```
 
-### Enforcing Permissions for read/write
+# Enforcing Permissions for read/write
 
 Two lines in httpd.conf should be changed. From:
 
@@ -32,7 +36,7 @@ anon-access = none
 auth-access = write
 ```
 
-### Authentication type changes
+# Apache2 Authentication Setup
 
 These need to be added to the Subversion block inside httpd.conf (Bitnami location of httpd.conf shown):
 
@@ -47,7 +51,7 @@ These need to be added to the Subversion block inside httpd.conf (Bitnami locati
 </Location>
 ```
 
-### Creating users
+# Creating users
 
 Use `htpasswd` to create users.
 
@@ -80,6 +84,6 @@ max-deltification-walk = 0
 compression-level = 0
 ```
 
-# Different choices for servers:
+# Different choices for Apache2/Subversion servers:
 
 1. [Bitnami-Cloud-Server-Setup](/paul-hammant/subsyncit/wiki/Bitnami-Cloud-Server-Setup) - for Amazon's EC2 platform, Google Cloud (and others)

@@ -1,7 +1,7 @@
 Python2 is required, as well as some `pip2` installed modules:
 
 ```
-pip2 install requests watchdog tinydb
+pip2 install requests watchdog tinydb sh glob2
 ```
 
 Note:
@@ -10,17 +10,15 @@ Note:
 2. Watchdog is Apache 2.0 licensed and maintained at https://github.com/gorakhargosh/watchdog
 2. TinyDB is MIT licensed and maintained at https://github.com/msiemens/tinydb
 
+# Running Subsyncit in developer mode
+
+Same as for [Client setup](CLIENT-SETUP.md)
+
 # Running the functional tests
 
 Functional tests can only run these on the same server as the Subversion and Apache installs as it runs subversion admin operations, too.
 
 You wll already have setup the Subversion+Apache server (as [described here](SERVER-SETUP)).
-
-Python modules that are needed:
-
-```
-pip install sh glob2 requests
-```
 
 In the checkout directory, run:
 

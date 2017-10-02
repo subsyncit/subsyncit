@@ -25,7 +25,6 @@ In the checkout directory, run:
 
 ```
 sudo python functional_test_of_sync_operations.py all <URL> <user> <root-of-repo-in-filesystem> <size-of-big-file>
-
 ```
 
 The URL is to the `svnParent` directory that the test will make a `unitTests` folder in. The user

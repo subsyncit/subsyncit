@@ -1,13 +1,13 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'File sync for the office or home that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues or family members',
+        'TAGLINE': 'File sync for the office (or home) that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues (or family members)',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'There are lots of features',
         'LIST': 'Here is a handy list!',
         'FILE_TYPES': 'Large and small file types',
-        'ALL_SORTS': 'Spreadsheets, movies, MP3s, pictures, etc',
+        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, picts too.',
         'MANY': 'One or thousands of concurrent users',
         'RW_PERMS': 'Read and write permissions for users and groups',
         'RW_PERMS2': 'Permissions, like direct access, at any place in the directory tree',
@@ -32,13 +32,13 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'File sync for the office or home that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues or family members',
+        'TAGLINE': 'File sync for the office (or home) that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues (or family members)',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'There are lots of features',
         'LIST': 'Here is a handy list!',
         'FILE_TYPES': 'Large and small file types',
-        'ALL_SORTS': 'Spreadsheets, movies, MP3s, pictures, etc',
+        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, picts too.',
         'MANY': 'One or thousands of concurrent users',
         'RW_PERMS': 'Read and write permissions for users and groups',
         'RW_PERMS2': 'Permissions, like direct access, at any place in the directory tree',

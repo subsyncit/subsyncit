@@ -1,15 +1,20 @@
 # Subsyncit
 
-A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server).
+A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server), and does not have any other server-side install.
 It is written in Python, works on Windows, Mac and Linux, and does not depend on a Subversion install on the client.
 
 It has been tested with files of random bytes up to 12GB in size. It has also been tested with Subversion repo holding
 3.4TB of history.
 
-You would use this if:
+Corporates would be attracted to this, if:
 
-* you want a file-sync solution with strong versioning.
-* you prefer to deploy your own server storage (public cloud, on-prem, in-home, SBCs, containers)
+* They prefer to deploy their own server storage (public cloud, on-premises, in-home, SBCs, containers), rather than trust an online service.
+* They want a file-sync solution with strong versioning.
+* They already have a subversion instance somewhere.
+* They don't want to be charged usage fees, however small.
+* Don't mind the lack of mobile device clients (for now)
+
+(Home deployers might like it for the same reasons)
 
 **Fun fact**: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
 trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
@@ -42,9 +47,9 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 
 ## Design goals, counter to the way Subversion normally works:
 
-* Does not maintain a working-tree (or working copy or 'checkout') on the client.
+* Does not maintain a working-tree (or 'working copy' or 'checkout') on the client.
  * there's no .svn/ folder(s).
-  * therefore there is only one version of each file on the client system.
+  * therefore there is only one version of each file on the client system, which is important for large binaries
 * No Subversion install on client (if that wasn't obvious)
 
 ## Working so far:
@@ -67,6 +72,6 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 
 # Further Reading
 
-1. [Client setup](CLIENT-SETUP.md)  <-- this is all you need to read if you're trying Subsyncit out.
+1. [Client setup](CLIENT-SETUP.md)  <-- this is all you need to read if you're trying out Subsyncit.
 2. [Server setup](SERVER-SETUP.md)
 3. [Developing](DEVELOPING.md)

@@ -28,7 +28,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source on GitHub (of course).'
+        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a> (of course). Installation instructions <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>.'
     });
 
     $translateProvider.translations('es', {

@@ -5,12 +5,12 @@ Scroll to the bottom for Amazon EC2, Google Cloud, office, and in-home Raspberry
 General requirement: a server with the following installed and setup:
 
 * Subversion
-* Apache2
-* mod_dav_svn
+* Apache2 with mod_dav_svn
 
 # Non-standard Apache2 settings
 
-These are the settings you'll need ADD to change in Apache's .conf file to allow Subsyncit modes of operation:
+These are the settings you'll need ADD to change in Apache's .conf file after a "default" install.
+These allow Subsyncit modes of operation, but do not stop Subversion operating as a normal install for subversion's own clients:
 
 ```
 <Location /svn>
@@ -24,7 +24,12 @@ These are the settings you'll need ADD to change in Apache's .conf file to allow
 
 # Enforcing Permissions for read/write
 
-Two lines in httpd.conf should be changed. From:
+By default, Subversion allows anonymous access to files that it holds. Most likely,
+you'll not want to do that for the types of file you would want to store in there for corporate assets.
+
+## Basic permissions setup
+
+Two lines in `httpd.conf` should be changed. From:
 
 ```
 # anon-access = read
@@ -38,9 +43,7 @@ anon-access = none
 auth-access = write
 ```
 
-# Apache2 Authentication Setup
-
-These need to be added to the Subversion block inside httpd.conf (Bitnami location of httpd.conf shown):
+These need to be added to the Subversion block inside `httpd.conf`:
 
 ```
 <Location /svn>
@@ -53,11 +56,9 @@ These need to be added to the Subversion block inside httpd.conf (Bitnami locati
 </Location>
 ```
 
-# Creating users
+## Creating users
 
 Use `htpasswd` to create users.
-
-(General case):
 
 ```
 sudo htpasswd -c /path/to/authz_users_file <username>
@@ -66,7 +67,7 @@ sudo htpasswd -c /path/to/authz_users_file <username>
 You will be prompted to choose a password. Also change `-c` to `-m` for second and subsequent invocations,
 as the former overwrites the file.
 
-## Optional Subversion settings
+# Optional Subversion settings for large files
 
 If you are storing large binary files (> 100MB), you may need to change some settings for the Subversion repo too.
 Specifically in `<svn_root>/db/fsfs.conf` on the server.

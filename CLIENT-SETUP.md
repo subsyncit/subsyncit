@@ -1,4 +1,4 @@
-# Subsyncit client computer installation
+# Installing Subsyncit on a client computer
 
 Python2 is required, as well as some `pip2` installed modules:
 
@@ -24,8 +24,7 @@ python2 subsyncit.py <url-of-subversion-root> <path-to-local-directory-we-want-t
 * `--no-verify-ssl-cert` to ignore certificate errors if you have a self-signed (say for testing)
 * `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
 
-## Trying out Subsyncit quickly
-
+# Trying out Subsyncit with a demo Subversion server
 
 ```
 python2 subsyncit.py https://s.paulhammant.com/subversion/demo <DIR> mark --passwd extff6sh
@@ -35,5 +34,13 @@ python2 subsyncit.py https://s.paulhammant.com/subversion/demo <DIR> mark --pass
 
 User 'Mark' only has read access, but Subsyncit will bring down two 'Project Gutenberg' ebooks, then keep checking every 30 seconds in case
 something else is added to the demo/ folder.
+
+You can do a conventional svn checkout too:
+
+```
+svn --username mark --password extff6sh https://s.paulhammant.com/subversion/demo
+```
+
+Or view the same content in a browser: [https://s.paulhammant.com/subversion/demo](https://s.paulhammant.com/subversion/demo). Remember to enter the name and password
 
 Note: s.paulhammant.com is a Bitnami cloud instance on Amazon's EC2.

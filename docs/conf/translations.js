@@ -1,7 +1,7 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'File sync for the office (or home) that is backed by <strong>Subversion</strong> (your own or cloud based), with revision history, permissions, and built for multiple colleagues (or family members)',
+        'TAGLINE': 'File sync for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -28,7 +28,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source on GitHub (of course)'
+        'GH': 'is open source on GitHub (of course).'
     });
 
     $translateProvider.translations('es', {

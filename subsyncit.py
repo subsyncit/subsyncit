@@ -598,7 +598,7 @@ def main(argv):
     parser = argparse.ArgumentParser(description='Subsyncit client')
 
     parser.add_argument("remote_subversion_repo_url")
-    parser.add_argument("absolute_local_root_path")
+    parser.add_argument("local_root_path")
     parser.add_argument("user")
     parser.add_argument('--passwd', dest='passwd', help="Password")
     parser.add_argument('--verify-ssl-cert', dest='verify_ssl_cert', action='store_true', help="Verify SSL Certificate")
@@ -615,9 +615,11 @@ def main(argv):
     else:
         passwd = args.passwd
 
+    args.absolute_local_root_path = os.path.abspath(args.local_root_path.replace("/", os.sep) \
+                         .replace("\\", os.sep).replace(os.sep+os.sep, os.sep))
+
     if not args.absolute_local_root_path.endswith(os.sep):
         args.absolute_local_root_path += os.sep
-    args.absolute_local_root_path = args.absolute_local_root_path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
     fn = args.absolute_local_root_path + os.sep + ".subsyncit.stop"
     if os.path.isfile(fn):

@@ -26,13 +26,14 @@ python2 subsyncit.py <url-of-subversion-root> <path-to-local-directory-we-want-t
 
 ## Trying out Subsyncit quickly
 
-Make a directory to sync to, ane replace 'HERE' below with the fully qualified path to that directory.
 
 ```
-python2 subsyncit.py https://s.paulhammant.com/subversion/demo> HERE mark --passwd extff6sh
+python2 subsyncit.py https://s.paulhammant.com/subversion/demo <DIR> mark --passwd extff6sh
 ```
 
-Mark only has read access, but Subsyncit will bring down two 'Project Gutenberg' ebooks, then keep checking every 30 seconds in case
+^ Make a directory to sync to, and replace <DIR> above with the path to that directory (fully qualified or relative).
+
+User 'Mark' only has read access, but Subsyncit will bring down two 'Project Gutenberg' ebooks, then keep checking every 30 seconds in case
 something else is added to the demo/ folder.
 
 Note: s.paulhammant.com is a Bitnami cloud instance on Amazon's EC2.

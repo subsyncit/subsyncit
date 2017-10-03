@@ -5,7 +5,7 @@ include
 pip-selfcheck.json
 .idea
 *.pyc
-functionalTests*
+integrationTests*
 unitTests*
 perfTests*
 runit.sh

@@ -91,3 +91,4 @@ compression-level = 0
 # Different choices for Apache2/Subversion servers:
 
 1. [Bitnami-Cloud-Server-Setup](/paul-hammant/subsyncit/wiki/Bitnami-Cloud-Server-Setup) - for Amazon's EC2 platform, Google Cloud (and others)
+2. 

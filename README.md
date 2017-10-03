@@ -67,6 +67,6 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 
 # Further Reading
 
-1. [Server setup](SERVER-SETUP.md)
-2. [Client setup](CLIENT-SETUP.md)
+1. [Client setup](CLIENT-SETUP.md)  <-- this is all you need to read if you're trying Subsyncit out.
+2. [Server setup](SERVER-SETUP.md)
 3. [Developing](DEVELOPING.md)

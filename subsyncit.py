@@ -86,7 +86,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_filename_patterns:
             return
         # print "Q:ADD-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
@@ -97,7 +97,8 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_filename_patterns \
+                or should_be_excluded(relative_file_name):
             return
         # print "Q:DEL-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
@@ -108,7 +109,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0\
                 or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_suffixes:
+                or get_suffix(relative_file_name) in self.excluded_filename_patterns:
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
             # print "Q:CHG-" + event.src_path
@@ -116,9 +117,16 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
                 get_relative_file_name(event.src_path, self.absolute_local_root_path), "change"))
 
 
-    def update_excluded_suffixes(self, excluded_suffixes):
-        self.excluded_suffixes = excluded_suffixes
+    def update_excluded_filename_patterns(self, excluded_filename_patterns):
+        self.excluded_filename_patterns = excluded_filename_patterns
 
+
+def should_be_excluded(relative_file_name, excluded_filename_patterns):
+    bn = os.path.basename(relative_file_name)
+    for pattern in excluded_filename_patterns:
+        if pattern.search(bn):
+            return True
+    return False
 
 def get_suffix(relative_file_name):
     file_name, extension = splitext(relative_file_name)
@@ -591,12 +599,16 @@ def keep_going(file_system_watcher, absolute_local_root_path):
         return False
     return True
 
-def get_excluded_suffixes(remote_subversion_repo_url, user, passwd, verifySetting):
+def get_excluded_filename_patterns(remote_subversion_repo_url, user, passwd, verifySetting):
     try:
-        get = requests.get(remote_subversion_repo_url + ".subsyncit-excluded-suffixes", auth=(user, passwd),
+        get = requests.get(remote_subversion_repo_url + ".subsyncit-excluded-filename-patterns", auth=(user, passwd),
                            verify=verifySetting)
         if (get.status_code == 200):
-            return get.content.splitlines()
+            lines = get.content.splitlines()
+            regexes = []
+            for line in lines:
+                regexs.append(re.compile(line))
+            return regexes
         return []
     except requests.exceptions.ConnectionError, e:
         return []
@@ -672,13 +684,13 @@ def main(argv):
         while keep_going(file_system_watcher, args.absolute_local_root_path):
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = get_remote_subversion_repo_revision_for(args.remote_subversion_repo_url, args.user, passwd, "", args.absolute_local_root_path, verifySetting) # root
             if root_revision_on_remote_svn_repo != -1:
-                excluded_suffixes = []
+                excluded_filename_patterns = []
                 if iteration == 0: # At boot time only for now
-                    excluded_suffixes = get_excluded_suffixes(args.remote_subversion_repo_url, args.user, passwd, verifySetting)
-                    notification_handler.update_excluded_suffixes(excluded_suffixes)
+                    excluded_filename_patterns = get_excluded_filename_patterns(args.remote_subversion_repo_url, args.user, passwd, verifySetting)
+                    notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(args.remote_subversion_repo_url, baseline_relative_path, args.user, passwd, verifySetting)
-                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path, excluded_suffixes)
+                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path, excluded_filename_patterns)
                     sync_remote_adds_and_changes_to_local(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
                     sync_remote_deletes_to_local(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)

@@ -255,13 +255,13 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
 
     @timedtest
-    def test_that_excluded_suffixes_work(self):
+    def test_that_excluded_patterns_work(self):
 
         self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
                                         auth=(self.user, self.passwd),
                                         verify=False))
 
-        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-suffixes", auth=(self.user, self.passwd), data=".foo\n.txt\n.bar", verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.foo\n.*\.txt\n.*\.bar", verify=False))
 
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 

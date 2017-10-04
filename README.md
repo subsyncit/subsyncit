@@ -31,6 +31,10 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 * Remote Subversion Repository (or repo) - on the server, a configuration of subversion that can take commits for so-authorized people.
 * Local Sync Directory - on the client a single directory, the contents for which will synchronized up and down to the remote Subversion repo.
 
+# Screenshots
+
+There are none as Subsyncit does not have a user interface (yet).
+
 # Overview
 
 ## Features in common with all file-sync technologies:

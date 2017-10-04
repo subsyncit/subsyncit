@@ -9,7 +9,7 @@ General requirement: a server with the following installed and setup:
 
 # Non-standard Apache2 settings
 
-These are the settings you'll need ADD to change in Apache's .conf file after a "default" install.
+These are the settings in `httpd.conf ` that you'll need ADD to change in Apache's .conf file after a "default" install.
 These allow Subsyncit modes of operation, but do not stop Subversion operating as a normal install for subversion's own clients:
 
 ```

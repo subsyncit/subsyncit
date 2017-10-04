@@ -350,6 +350,13 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
 
     output = propfind.content
 
+    if "PROPFIND requests with a Depth of \"infinity\"" in output:
+        print "'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
+              "the server (in httpd.conf propbably). Refer to " \
+              "https://github.com/paul-hammant/subsyncit/blob/master/SERVER-SETUP.md. " \
+              "Subsyncit is refusing to run."
+        exit(1)
+
     entries = []; path = ""; rev = -1; sha1 = None
 
     for line in output.splitlines():

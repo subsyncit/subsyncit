@@ -28,7 +28,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a> (of course). Installation instructions <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>.'
+        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>, but it really only for IT people right now while this is in BETA.'
     });
 
     $translateProvider.translations('es', {
@@ -59,7 +59,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'PH': 'Paul Hammant',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a> (of course). Installation instructions <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>.'
+        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>, but it really only for IT people right now while this is in BETA.'
     });
 
     var userLang = navigator.language || navigator.userLanguage;

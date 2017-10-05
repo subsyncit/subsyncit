@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-05 16:08:06.280485 (UTC)
+# Version: 2017-10-05 16:31:28.897613 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -434,6 +434,7 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
 
         if output == "":
+            print ">> PUT done: " + rel_file_name
             add_changes += 1
             update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:

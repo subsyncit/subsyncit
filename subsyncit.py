@@ -21,7 +21,7 @@
 # Three arguments for this script:
 # 1. Remote Subversion repo URL. Like - "http://0.0.0.0:32768/svn/testrepo"
 # 2. Local Sync Directory (fully qualified or relative). Like /path/to/mySyncDir
-# 3. Subversion user name
+# 3. Subversion user name.
 #
 # Optional arguments
 # `--passwd` to supply the password on the command line (plain text) instead of prompting for secure entry

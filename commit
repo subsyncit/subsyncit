@@ -4,6 +4,8 @@ from datetime import datetime
 import sh
 import sys
 
+import subprocess
+
 x = sys.argv
 
 changeset = sh.git("status")
@@ -21,8 +23,8 @@ for line in changeset.splitlines():
         changes_not_staged_for_commit = True
 
     if "modified:   subsyncit.py" in line:
-        if changes_not_staged_for_commit:
-            print "subsyncit.py modified, but you need to git-add it"
+        if changes_not_staged_for_commit and sys.argv[1] != "-am":
+            print "subsyncit.py modified, but you need to git-add it. Not committing"
             exit(1)
         subsyncit_modified = True
 
@@ -43,4 +45,5 @@ if subsyncit_modified and changes_to_be_committed:
 
     sh.git("add", "subsyncit.py")
 
+subprocess.call(["git", "commit"] + sys.argv[1:])
 

@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-05 13:43:59.257745 (UTC)
+# Version: 2017-10-05 15:19:24.321666 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -345,11 +345,13 @@ def delete_file_and_entries_in_table(files_table, relative_file_name, absolute_l
             shutil.rmtree(name)
         except OSError:
             pass
-    parent = os.path.dirname(name)
-    listdir = os.listdir(parent)
+    parent = os.path.dirname(relative_file_name)
+    listdir = os.listdir(absolute_local_root_path + parent)
     if len(listdir) == 0:
         try:
-            shutil.rmtree(parent)
+            shutil.rmtree(absolute_local_root_path + parent)
+            File = Query()
+            files_table.remove(File.relativeFileName == parent)
         except OSError:
             pass
 
@@ -603,7 +605,7 @@ def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolut
             local_adds_chgs_deletes_queue.put((row['relativeFileName'], "delete"))
 
 
-def keep_going(file_system_watcher, absolute_local_root_path):
+def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
     if not file_system_watcher.is_alive():
         return False
     fn = absolute_local_root_path + ".subsyncit.stop"
@@ -699,7 +701,7 @@ def main(argv):
     iteration = 0
     last_missed_time = 0
     try:
-        while keep_going(file_system_watcher, args.absolute_local_root_path):
+        while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = get_remote_subversion_repo_revision_for(args.remote_subversion_repo_url, args.user, passwd, "", args.absolute_local_root_path, verifySetting) # root
             if root_revision_on_remote_svn_repo != -1:
                 excluded_filename_patterns = []

@@ -164,6 +164,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+            time.sleep(40)
 
 
     @timedtest

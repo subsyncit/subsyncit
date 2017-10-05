@@ -68,7 +68,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
         self.absolute_local_root_path = absolute_local_root_path
         self.file_system_watcher = file_system_watcher
-        self.excluded_suffixes = []
+        self.excluded_filename_patterns = []
 
     def on_created(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
@@ -81,38 +81,33 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
                 pass
             except OSError:
                 pass
-            # print("Shutdown file .subsyncit.stop detected. Shutting down")
             return
         if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0\
-                or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_filename_patterns:
+                or len(relative_file_name) == 0 \
+                or ".clash_" in relative_file_name \
+                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        # print "Q:ADD-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
             get_relative_file_name(event.src_path, self.absolute_local_root_path), "add_" + ("dir" if event.is_directory else "file")))
 
     def on_deleted(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0\
-                or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_filename_patterns \
-                or should_be_excluded(relative_file_name):
+                or len(relative_file_name) == 0 \
+                or ".clash_" in relative_file_name \
+                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        # print "Q:DEL-" + event.src_path
         self.local_adds_chgs_deletes_queue.put((
             get_relative_file_name(event.src_path, self.absolute_local_root_path), "delete"))
 
     def on_modified(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0\
-                or ".clash_" in relative_file_name\
-                or get_suffix(relative_file_name) in self.excluded_filename_patterns:
+                or len(relative_file_name) == 0 \
+                or ".clash_" in relative_file_name \
+                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
-            # print "Q:CHG-" + event.src_path
             self.local_adds_chgs_deletes_queue.put((
                 get_relative_file_name(event.src_path, self.absolute_local_root_path), "change"))
 
@@ -164,13 +159,13 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
             return ""
         return output
 
-def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path, excluded_suffixes):
+def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path, excluded_filename_patterns):
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
         if relative_file_name.startswith(".") \
-                or get_suffix(relative_file_name) in excluded_suffixes \
-                or len(relative_file_name) == 0:
+                or len(relative_file_name) == 0 \
+                or should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
         dir_or_file = "dir" if sha1 is None else "file"
         File = Query()
@@ -235,7 +230,6 @@ def sync_remote_adds_and_changes_to_local(files_table, remote_subversion_repo_ur
 
             if os.path.exists(abs_local_file_path):
                 local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                print_rows(files_table)
                 if local_sha1 != old_sha1_should_be:
                     os.rename(abs_local_file_path,
                               abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
@@ -563,7 +557,7 @@ def print_rows(files_table):
                   str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['instruction']))
 
 
-def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
+def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
     for (dir, _, files) in os.walk(absolute_local_root_path):
         for f in files:
             path = os.path.join(dir, f)
@@ -571,13 +565,16 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
             in_subversion = file_is_in_subversion(files_table, relative_file_name)
             instruction = instruction_for_file(files_table, relative_file_name)
             path_exists = os.path.exists(path)
-            if not relative_file_name.startswith(".") and ".clash_" not in relative_file_name:
-                if path_exists and not in_subversion:
-                    local_adds_chgs_deletes_queue.put((relative_file_name, "add_file"))
-                elif path_exists and in_subversion and instruction == None:
-                    # This is speculative, logic further on will not PUT the file up
-                    # if the SHA is unchanged.
-                    local_adds_chgs_deletes_queue.put((relative_file_name, "change"))
+            if relative_file_name.startswith(".") \
+                    or ".clash_" in relative_file_name \
+                    or should_be_excluded(relative_file_name, excluded_filename_patterns):
+                continue
+            if path_exists and not in_subversion:
+                local_adds_chgs_deletes_queue.put((relative_file_name, "add_file"))
+            elif path_exists and in_subversion and instruction == None:
+                # This is speculative, logic further on will not PUT the file up
+                # if the SHA is unchanged.
+                local_adds_chgs_deletes_queue.put((relative_file_name, "change"))
 
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
     for row in files_table.all():
@@ -607,7 +604,7 @@ def get_excluded_filename_patterns(remote_subversion_repo_url, user, passwd, ver
             lines = get.content.splitlines()
             regexes = []
             for line in lines:
-                regexs.append(re.compile(line))
+                regexes.append(re.compile(line))
             return regexes
         return []
     except requests.exceptions.ConnectionError, e:
@@ -703,7 +700,7 @@ def main(argv):
                     # This is 1) a fallback, in case the watchdog file watcher misses something
                     # And 2) a processor that's going to process additions to the local sync dir
                     # that may have happened when this daemon wasn't running.
-                    enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns)
                     enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                     last_missed_time = time.time()
             sleep_a_little(args.sleep_secs)

@@ -361,21 +361,54 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
 
     @timedtest
-    def test_an_excluded_suffix_is_not_pushed_up(self):
+    def test_an_excluded_filename_patterns_is_not_pushed_up(self):
 
-        self.expect201(requests.put(self.svn_repo + "integrationTests/.subsyncit-excluded-suffixes", auth=(self.user, self.passwd), data=".bak\n", verify=False))
-        p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
+                                        auth=(self.user, self.passwd),
+                                        verify=False))
+
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.foo\n.*\.txt\n\~\$.*\n.*\.bar", verify=False))
+
+        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
+        with open(op1, "w") as text_file:
+            text_file.write("I should not be PUT up to the server")
+
+        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "~$output"
+        with open(op1, "w") as text_file:
+            text_file.write("I also should not be PUT up to the server")
+
+        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "~output"
+        with open(op1, "w") as text_file:
+            text_file.write("I also should not be PUT up to the server")
+
+        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "$output"
+        with open(op1, "w") as text_file:
+            text_file.write("I also should not be PUT up to the server")
+
+        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.zzz"
+        with open(op1, "w") as text_file:
+            text_file.write("Hello to you too")
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
+
         try:
-            time.sleep(2)
-            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.bak", "w") as text_file:
-                text_file.write("Hello")
-            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w") as text_file:
-                text_file.write("Hello")
-            time.sleep(10)
-            self.assertEquals(
-                requests.get(self.svn_repo + "integrationTests/output.bak", auth=(self.user, self.passwd), verify=False).status_code, 404)
-            self.assertEquals(
-                requests.get(self.svn_repo + "integrationTests/output.txt", auth=(self.user, self.passwd), verify=False).status_code, 200)
+
+            self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "output.zzz")
+            self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "$output")
+            self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "~output")
+
+            time.sleep(5) # the two files should arrive pretty much at the same time, but why not wait 3 secs, heh?
+
+            self.assertNotEqual(
+                requests.get(self.svn_repo + self.rel_dir_1 + "output.txt",
+                                 auth=(self.user, self.passwd), verify=False)
+                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "output.txt" + " should NOT have appeared, but it did")
+
+            self.assertNotEqual(
+                requests.get(self.svn_repo + self.rel_dir_1 + "~$output",
+                                 auth=(self.user, self.passwd), verify=False)
+                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "~$output" + " should NOT have appeared, but it did")
+
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 

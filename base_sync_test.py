@@ -49,6 +49,21 @@ class BaseSyncTest(unittest.TestCase):
             time.sleep(1)
 
 
+    def wait_for_URL_to_appear(self, url):
+        ix = 0
+
+        status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
+        while status == 404:
+            ix += 1
+            if ix > 45:
+                break
+            time.sleep(1)
+            status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
+
+        if status != 200:
+            self.fail("URL " + url + " should have appeared, but it did not (status code: " + str(status) + ")")
+
+
     def process_output(self, line):
         print(line)
         self.line += ("\n" + line)

@@ -89,6 +89,14 @@ to the server. Turn it off for all file types, by making the pertinent line like
 compression-level = 0
 ```
 
+# Excluding temp files from syncing
+
+## Microsoft Office
+
+```
+\~\$.*
+```
+
 # Different choices for Apache2/Subversion servers:
 
 1. [Bitnami-Cloud-Server-Setup](/paul-hammant/subsyncit/wiki/Bitnami-Cloud-Server-Setup) - for Amazon's EC2 platform, Google Cloud (and others)

@@ -1,5 +1,7 @@
 # Subsyncit - File sync backed by Subversion
 #
+# Version: xxx
+#
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
 #   This program is free software: you can redistribute it and/or modify
@@ -14,11 +16,20 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Four arguments for this script
+# Three arguments for this script:
 # 1. Remote Subversion repo URL. Like - "http://0.0.0.0:32768/svn/testrepo"
-# 2. Local Sync Directory (fully qualified). Like /scm/oss/testSync
-# 3. Subversion username (davsvn in the alpine-svn docker image)
-# 4. Subversion password (davsvn in the alpine-svn docker image)
+# 2. Local Sync Directory (fully qualified or relative). Like /path/to/mySyncDir
+# 3. Subversion username
+#
+# Optional arguments
+# `--passwd` to supply the password on the command line (plain text) instead of prompting for secure entry
+# `--no-verify-ssl-cert` to ignore certificate errors if you have a self-signed (say for testing)
+# `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
+#
+# Note: There's a database created in the Local Sync Directory called ".subsyncit.db".
+# It contains one row per file that's synced back and forth. There's a field in there repoRev
+# which is not currently used, but set to -999
+
 import ctypes
 import os
 import sys
@@ -278,7 +289,7 @@ def prt_files_table_for(files_table, relative_file_name):
 
 def update_row_revision(files_table, relative_file_name, rev=-1):
     File = Query()
-    files_table.update({'repoRev': rev}, File.relativeFileName == relative_file_name)
+    files_table.update({'repoRev': -999}, File.relativeFileName == relative_file_name)
 
 
 def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
@@ -290,7 +301,7 @@ def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instr
                    'isFile': ("1" if file_or_dir == "file" else "0"),
                    'remoteSha1': None,
                    'localSha1': None,
-                   'repoRev': rev})
+                   'repoRev': -999})
 
     if instruction is not None:
         update_instruction_in_table(files_table, instruction, relative_file_name)

@@ -171,7 +171,7 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
         File = Query()
         rows = files_table.search(File.relativeFileName == relative_file_name)
         if len(rows) > 0:
-            if rows[0]['repoRev'] != rev:
+            if rows[0]['remoteSha1'] != sha1:
                 update_instruction_in_table(files_table, "GET", relative_file_name)
 #               else:
             else:
@@ -258,7 +258,7 @@ def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
 def update_row_shas(files_table, relative_file_name, sha1):
     File = Query()
     foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1}, File.relativeFileName == relative_file_name)
-    # print "update_row_shas: " + str(foo) + "-" + relative_file_name + "-" + sha1 + "-" + prt_files_table_for(files_table, relative_file_name)
+    # print "update_row_shas: " + str(foo) + " " + relative_file_name + ": " + sha1 + " --- " + prt_files_table_for(files_table, relative_file_name)
 
 
 def prt_files_table_for(files_table, relative_file_name):
@@ -392,12 +392,12 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(files_table, remote_subversion_repo_url, user, passwd, baseline_relative_path, absolute_local_root_path, verifySetting):
 
     File = Query()
-    rows = files_table.search(File.instruction == 'PUT')
+    rows = files_table.search(File.instruction == "PUT")
 
     add_changes = 0
     for row in rows:
-        fn = row['relativeFileName']
-        abs_local_file_path = (absolute_local_root_path + fn)
+        rel_file_name = row['relativeFileName']
+        abs_local_file_path = (absolute_local_root_path + rel_file_name)
         new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
         output = ""
         if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
@@ -409,25 +409,26 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
             add_changes += 1
             output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting)  # <h1>Created</h1>
             if "... still being written to" not in output:
-                update_sha_and_revision_for_row(files_table, fn, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
+                update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
             if not output == "":
-                print("Unexpected on_created output for " + fn + " = [" + str(output) + "]")
+                print("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]")
         if "... still being written to" not in output:
-            update_instruction_in_table(files_table, None, fn)
+            update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
 
 
 def update_sha_and_revision_for_row(files_table, relative_file_name, local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting):
-    elements_for = svn_metadata_xml_elements_for(remote_subversion_repo_url + baseline_relative_path + relative_file_name, "", user, passwd, verifySetting)
+    name = remote_subversion_repo_url + relative_file_name
+    elements_for = svn_metadata_xml_elements_for(name, baseline_relative_path, user, passwd, verifySetting)
     i = len(elements_for)
     if i > 1:
         print("elements found == " + str(i))
-    for relative_file_name, rev, sha1 in elements_for:
+    for relative_file_name2, rev, sha1 in elements_for:
         if local_sha1 != sha1:
-            print("SHA1s dont match when they should for " + relative_file_name + " " + str(sha1) + " " + local_sha1)
-        update_row_shas(files_table, relative_file_name, local_sha1)
-        update_row_revision(files_table, relative_file_name, rev)
+            print("SHA1s don't match when they should for " + relative_file_name2 + " " + str(sha1) + " " + local_sha1)
+        update_row_shas(files_table, relative_file_name2, local_sha1)
+        update_row_revision(files_table, relative_file_name2, rev)
 
 
 def update_revisions_for_created_directories(files_table, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):

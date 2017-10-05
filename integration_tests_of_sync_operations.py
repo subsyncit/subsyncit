@@ -423,7 +423,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         sz = os.stat(filename).st_size
         self.upload_file(filename, self.svn_repo + "integrationTests/testBigRandomFile")
 
-        self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+        # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
         start = time.time()
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -432,39 +432,39 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
             print " ... secs: " + str(round(time.time() - start, 1))
 
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             self.signal_stop_of_subsyncIt(IntegrationTestsOfSyncOperations.testSyncDir1)
             p1.wait()
 
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             self.make_a_big_random_file(filename, start, self.size)
 
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             self.upload_file(filename, self.svn_repo + "integrationTests/testBigRandomFile")
 
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             start = time.time()
 
             print "start p1 again"
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_below(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             p1.kill()
             print "Killed after secs: " + str(round(time.time() - start, 1))
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             time.sleep(5)
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
             print "Aborted size: " + str(aborted_get_size)
 
-            self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
@@ -472,7 +472,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
 
-        self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+        # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
         clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
         self.assertEquals(os.stat(clash_file).st_size, aborted_get_size)

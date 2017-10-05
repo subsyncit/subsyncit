@@ -1,7 +1,7 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'File sync for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
+        'TAGLINE': 'A file sync client for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -32,7 +32,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'File sync for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
+        'TAGLINE': 'A file sync client for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',

@@ -30,6 +30,8 @@ from multiprocessing import Queue
 import shutil
 
 import re
+from random import randint
+
 import requests
 import requests.packages.urllib3
 from watchdog.events import FileSystemEventHandler
@@ -39,6 +41,15 @@ import datetime
 from tinydb import TinyDB, Query
 import getpass
 import argparse
+
+PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
+             '<D:propfind xmlns:D="DAV:">\n' \
+             '<D:prop xmlns:S="http://subversion.tigris.org/xmlns/dav/">\n' \
+             '<S:sha1-checksum/>\n' \
+             '<D:version-name/>\n' \
+             '<S:baseline-relative-path/>\n' \
+             '</D:prop>\n' \
+             '</D:propfind>\n'
 
 
 def debug(message):
@@ -339,15 +350,7 @@ def get_relative_file_name(full_path, absolute_local_root_path):
     return rel
 
 def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, verifySetting):
-    propfind = requests.request('PROPFIND', url, auth=(user, passwd),
-                                data='<?xml version="1.0" encoding="utf-8" ?>\n' \
-                                     '<D:propfind xmlns:D="DAV:">\n' \
-                                     '<D:prop xmlns:S="http://subversion.tigris.org/xmlns/dav/">\n' \
-                                     '<S:sha1-checksum/>\n' \
-                                     '<D:version-name/>\n' \
-                                     '<S:baseline-relative-path/>\n' \
-                                     '</D:prop>\n' \
-                                     '</D:propfind>\n',
+    propfind = requests.request('PROPFIND', url, auth=(user, passwd), data=PROPFIND,
                                 headers={'Depth': 'infinity'}, verify=verifySetting)
 
     output = propfind.content
@@ -481,18 +484,22 @@ def get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, pa
     baseline_relative_path = ""
     output = ""
     try:
-        propfind = requests.request('PROPFIND', remote_subversion_repo_url + relative_file_name.replace(os.sep, "/"), auth=(user, passwd),
-                                    data='<?xml version="1.0" encoding="utf-8"?>\n<propfind xmlns="DAV:"><allprop/></propfind>',
+        url = remote_subversion_repo_url + relative_file_name.replace("\\", "/")
+        propfind = requests.request('PROPFIND', url, auth=(user, passwd), data=PROPFIND,
                                     headers={'Depth': '0'}, verify=verifySetting)
         if 200 <= propfind.status_code <= 299:
             output = propfind.content
+
             for line in output.splitlines():
                 if ":baseline-relative-path" in line and "baseline-relative-path/>" not in line:
                     baseline_relative_path=line[line.index(">")+1:line.index("<", 3)]
                 if ":version-name" in line:
                     ver=int(line[line.index(">")+1:line.index("<", 3)])
                 if ":sha1-checksum" in line:
-                    sha1=line[line.index(">")+1:line.index("<", 3)]
+                    if "sha1-checksum/" in line:
+                        sha1 = None
+                    else:
+                        sha1=line[line.index(">")+1:line.index("<", 3)]
             # debug(relative_file_name + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1) + " / " + str(ver))
         else:
             output = "PROPFIND status: " + str(propfind.status_code) + " for: " + remote_subversion_repo_url + " user: " + user

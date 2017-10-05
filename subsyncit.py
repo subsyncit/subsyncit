@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-05 15:19:24.321666 (UTC)
+# Version: 2017-10-05 15:51:36.769049 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -426,11 +426,15 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
         else:
             add_changes += 1
             output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting)  # <h1>Created</h1>
-            if "... still being written to" not in output:
-                update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
+
+            if "txn-current-lock': Permission denied" in output:
+                print "User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo"
             if not output == "":
                 print("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]")
-        if "... still being written to" not in output:
+            if "... still being written to" not in output:
+                update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
+
+        if output == "":
             update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")

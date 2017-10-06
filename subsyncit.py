@@ -395,8 +395,8 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
 
 def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     search = re.search(
-        "<lp2:baseline-relative-path>" + baseline_relative_path.replace(
-            os.sep, "/") + "(.*)</lp2:baseline-relative-path>", line)
+        "<lp[0-9]:baseline-relative-path>" + baseline_relative_path.replace(
+            os.sep, "/") + "(.*)</lp[0-9]:baseline-relative-path>", line)
     if search:
         path = search.group(1)
         if path.startswith("/"):

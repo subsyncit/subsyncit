@@ -167,7 +167,7 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
     if s1 != s2:
         return "... still being written to"
     relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
-    # TODO has it chnged on server
+    # TODO has it changed on server
     with open(abs_local_file_path, "rb") as f:
         url = remote_subversion_repo_url + relative_file_name.replace(os.sep, "/")
         put = requests.put(url, auth=(user, passwd), data=f.read(), verify=verifySetting)
@@ -187,6 +187,8 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
+        relative_file_name = relative_file_name.replace("&amp;","&")
+#        print "rel nam:" + relative_file_name
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0 \
                 or should_be_excluded(relative_file_name, excluded_filename_patterns):
@@ -433,10 +435,9 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
             if "... still being written to" not in output:
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
 
-        if output == "":
-            print ">> PUT done: " + rel_file_name
-            add_changes += 1
-            update_instruction_in_table(files_table, None, rel_file_name)
+            if output == "":
+                add_changes += 1
+                update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
 
@@ -732,6 +733,7 @@ def main(argv):
                     enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                     last_missed_time = time.time()
             sleep_a_little(args.sleep_secs)
+#            print_rows(files_table)
             iteration += 1
     except KeyboardInterrupt:
         print "CTRL-C, Shutting down..."

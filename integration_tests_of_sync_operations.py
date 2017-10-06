@@ -293,15 +293,18 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                                         self.svn_repo + self.rel_dir_1 + "f r e d/",
                                         auth=(self.user, self.passwd),
                                         verify=False))
-        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "f r e d/o u t p u t.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "f r e d/o u t & p u t.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
         p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
 
         try:
-            op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "f r e d/o u t p u t.txt"
+            op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "f r e d/o u t & p u t.txt"
             self.wait_for_file_to_appear(op1)
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+        # with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "paul was here.txt", "w") as text_file:
+        #     text_file.write("Hello to you too")
 
 
     @timedtest

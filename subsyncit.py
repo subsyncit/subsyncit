@@ -397,8 +397,8 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
 
 def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     search = re.search(
-        "<lp2:baseline-relative-path>" + baseline_relative_path.replace(
-            os.sep, "/") + "(.*)</lp2:baseline-relative-path>", line)
+        "<lp[0-9]:baseline-relative-path>" + baseline_relative_path.replace(
+            os.sep, "/") + "(.*)</lp[0-9]:baseline-relative-path>", line)
     if search:
         path = search.group(1)
         if path.startswith("/"):
@@ -434,7 +434,6 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
                 print("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]")
             if "... still being written to" not in output:
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
-
             if output == "":
                 add_changes += 1
                 update_instruction_in_table(files_table, None, rel_file_name)

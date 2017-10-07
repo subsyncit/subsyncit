@@ -125,6 +125,48 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
 
     @timedtest
+    def test_a_hidden_files_dont_get_put_into_svn(self):
+
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
+
+        dir = IntegrationTestsOfSyncOperations.testSyncDir1
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+        try:
+            with open(dir + ".foo", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + ".DS_Store", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            os.makedirs(dir + "two")
+
+            with open(dir + "two/.foo", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + "two/.DS_Store", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + "control", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            time.sleep(10)
+
+            self.assertEqual(
+                requests.get(self.svn_repo + self.rel_dir_1 + "control",
+                                 auth=(self.user, self.passwd), verify=False)
+                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
+
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + "two/.foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + "two/.DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
+
+        finally:
+            self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+    @timedtest
     def test_a_deleted_file_syncs_down(self):
 
         self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))

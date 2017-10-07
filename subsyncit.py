@@ -136,18 +136,17 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         self.excluded_filename_patterns = excluded_filename_patterns
 
 def should_be_excluded(relative_file_name, excluded_filename_patterns):
-    if relative_file_name.startswith(".") \
+
+    basename = os.path.basename(relative_file_name)
+
+    if basename.startswith(".") \
            or len(relative_file_name) == 0 \
            or ".clash_" in relative_file_name:
         return True
 
-    basename = os.path.basename(relative_file_name)
     for pattern in excluded_filename_patterns:
         if pattern.search(basename):
             return True
-
-    if basename in [".DS_Store"]:
-        return True
 
     return False
 

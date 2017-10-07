@@ -77,8 +77,8 @@ class BaseSyncTest(unittest.TestCase):
     def start_subsyncit(self, svn_repo, dir, passwd=None):
         if passwd is None:
             passwd = self.passwd
-        print "Subsyncit start. URL: " + svn_repo + ", dir: " + dir
-        python = sh.python("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
+        print("Subsyncit start. URL: " + svn_repo + ", dir: " + dir)
+        python = sh.python3("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
                            "--sleep-secs-between-polling", "1",
                            '--passwd', passwd, _out=self.process_output,
                            _err_to_out=True, _bg=True)
@@ -104,13 +104,13 @@ class BaseSyncTest(unittest.TestCase):
         ix = 0
         while val not in contents:
             ix += 1
-            if ix > 45:
+            if ix > 90:
                 self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
             time.sleep(1)
             contents = self.file_contents(f)
 
     def file_contents(self, f):
-        open1 = open(f)
+        open1 = open(f, encoding="utf-8")
         contents = open1.read()
         open1.close()
         return contents

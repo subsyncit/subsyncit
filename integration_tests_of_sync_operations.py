@@ -84,9 +84,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         t2 = time.time()
         dt = str((t2 - t1) * 1.00)
         dtout = dt[:(dt.find(".") + 4)]
-        print "----------------------------------------------------------"
-        print 'Test {0} finished in {1}s using {2}'.format(getattr(f, "__name__", "<unnamed>"), dtout, IntegrationTestsOfSyncOperations.testSyncDir1)
-        print "=========================================================="
+        print("----------------------------------------------------------")
+        print('Test {0} finished in {1}s using {2}'.format(getattr(f, "__name__", "<unnamed>"), dtout, IntegrationTestsOfSyncOperations.testSyncDir1))
+        print("==========================================================")
 
     @timedtest
     def test_a_single_file_syncs(self):
@@ -94,11 +94,12 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         p1, p2 = self.start_two_subsyncits("integrationTests/")
         try:
             op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
-            with open(op1, "w") as text_file:
+            with open(op1, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
             op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
             self.wait_for_file_to_appear(op2)
-            contents = open(op2).read()
+            time.sleep(0.5)
+            contents = open(op2, encoding="utf-8").read()
             self.assertEqual(contents, "Hello")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -110,12 +111,14 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1, p2 = self.start_two_subsyncits("integrationTests/")
         try:
-            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w") as text_file:
-                text_file.write("Hello")
+            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello") # f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0
             op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
+
             self.wait_for_file_to_appear(op2)
-            with open(op2, "w") as text_file:
-                text_file.write("Hello to you too")
+            time.sleep(1)
+            with open(op2, "w", encoding="utf-8") as text_file:
+                text_file.write("Hello to you too") # 3f19e1ea9c19f0c6967723b453a423340cbd6e36
             self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "Hello to you too")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -198,13 +201,14 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1, p2 = self.start_two_subsyncits("integrationTests/")
         try:
-            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w") as text_file:
+            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
             op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
             self.wait_for_file_to_appear(op2)
+            time.sleep(0.5)
             os.remove(op2)
             self.wait_for_file_to_disappear(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt")
-            print  IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt has disappeared as expected"
+            print(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt has disappeared as expected")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
@@ -431,9 +435,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         start = time.time()
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
         try:
-            print "Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be ... "
+            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be ... ")
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
-            print " ... secs: " + str(round(time.time() - start, 1))
+            print(" ... secs: " + str(round(time.time() - start, 1)))
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -452,20 +456,20 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             start = time.time()
 
-            print "start p1 again"
+            print("start p1 again")
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_below(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             p1.kill()
-            print "Killed after secs: " + str(round(time.time() - start, 1))
+            print("Killed after secs: " + str(round(time.time() - start, 1)))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             time.sleep(5)
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
-            print "Aborted size: " + str(aborted_get_size)
+            print("Aborted size: " + str(aborted_get_size))
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -478,26 +482,26 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
         clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
-        self.assertEquals(os.stat(clash_file).st_size, aborted_get_size)
+        self.assertEqual(os.stat(clash_file).st_size, aborted_get_size)
 
     def make_a_big_random_file(self, filename, start, size):
-        print "Making " + size + "MB random file ... "
+        print("Making " + size + "MB random file ... ")
         sh.bash("./make_a_so_big_file.sh", filename, size)
-        print " ... secs: " + str(round(time.time() - start, 1))
+        print(" ... secs: " + str(round(time.time() - start, 1)))
 
     def list_files(self, root):
         glob = glob2.glob(root + "**")
-        print "List of files in " + root + "folder:"
+        print("List of files in " + root + "folder:")
         if len(glob) == 0:
-            print "  no files"
+            print("  no files")
         for s in glob:
-            print "  " + (str(s))
+            print("  " + (str(s)))
 
     def expect201(self, commandOutput):
-        self.assertEquals("<Response [201]>", str(commandOutput))
+        self.assertEqual("<Response [201]>", str(commandOutput))
 
     def expect204(self, commandOutput):
-        self.assertEquals("<Response [204]>", str(commandOutput))
+        self.assertEqual("<Response [204]>", str(commandOutput))
 
 
 if __name__ == '__main__':

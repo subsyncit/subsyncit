@@ -1,7 +1,7 @@
-Python2 is required, as well as some `pip2` installed modules:
+Python3 is required, as well as some `pip3` installed modules:
 
 ```
-pip2 install requests watchdog tinydb sh glob2
+pip3 install requests watchdog tinydb sh glob2 decorator boltons
 ```
 
 Note:

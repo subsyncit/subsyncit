@@ -35,14 +35,14 @@ def make_or_wipe_server_side_subversion_repo(svn_parent_root, repo_name, compres
     sh.sync()
     for line in fileinput.FileInput(svn_parent_root + repo_name + "/db/fsfs.conf", inplace=True):
         if compression and "# compression-level" in line:
-            print "compression-level = 0"
+            print("compression-level = 0")
         elif deltification and "# max-deltification-walk" in line:
-            print "max-deltification-walk = 0"
+            print("max-deltification-walk = 0")
         elif rep_sharing and "# enable-rep-sharing" in line:
-            print "enable-rep-sharing = false"
+            print("enable-rep-sharing = false")
         else:
-            print line
+            print(line)
 
 if __name__ == "__main__":
-    print "Args: <parent-folder> <repo-name>"
+    print("Args: <parent-folder> <repo-name>")
     make_or_wipe_server_side_subversion_repo(sys.argv[1], sys.argv[2], False, True, True)

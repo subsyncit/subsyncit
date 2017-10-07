@@ -105,7 +105,7 @@ class BaseSyncTest(unittest.TestCase):
         while val not in contents:
             ix += 1
             if ix > 45:
-                self.assertIn(val, contents)
+                self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
             time.sleep(1)
             contents = self.file_contents(f)
 
@@ -120,7 +120,7 @@ class BaseSyncTest(unittest.TestCase):
         while os.path.exists(f):
             ix += 1
             if ix > 45:
-                self.fail("no sync'd file (or dir) deletion ")
+                self.fail("file " + f + " didn't disappear in 45 secs")
             time.sleep(1)
 
 

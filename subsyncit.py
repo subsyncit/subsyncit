@@ -394,7 +394,8 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
         if ":sha1-checksum>" in line:
             sha1 = line[line.index(">") + 1:line.index("<", 3)]
         if "</D:response>" in line:
-            entries.append ((path, rev, sha1))
+            if path != "":
+                entries.append ((path, rev, sha1))
             path = ""; rev = -1; sha1 = None
 
     # debug(path + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1))
@@ -441,7 +442,7 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
             if output == "":
                 add_changes += 1
-                update_instruction_in_table(files_table, None, rel_file_name)
+        update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
 

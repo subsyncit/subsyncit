@@ -106,45 +106,45 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
             except OSError:
                 pass
             return
-        if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0 \
-                or ".clash_" in relative_file_name \
-                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
+        if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        self.local_adds_chgs_deletes_queue.put((
-            get_relative_file_name(event.src_path, self.absolute_local_root_path), "add_" + ("dir" if event.is_directory else "file")))
+
+        #print "on_add: " + relative_file_name
+        self.local_adds_chgs_deletes_queue.put((relative_file_name, "add_" + ("dir" if event.is_directory else "file")))
 
     def on_deleted(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
-        if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0 \
-                or ".clash_" in relative_file_name \
-                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
+        if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        self.local_adds_chgs_deletes_queue.put((
-            get_relative_file_name(event.src_path, self.absolute_local_root_path), "delete"))
+        #print "on_del: " + relative_file_name
+        self.local_adds_chgs_deletes_queue.put((relative_file_name, "delete"))
 
     def on_modified(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
-        if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0 \
-                or ".clash_" in relative_file_name \
-                or should_be_excluded(relative_file_name, self.excluded_filename_patterns):
+        if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
-            self.local_adds_chgs_deletes_queue.put((
-                get_relative_file_name(event.src_path, self.absolute_local_root_path), "change"))
+            #print "on_chg: " + relative_file_name
+            self.local_adds_chgs_deletes_queue.put((relative_file_name, "change"))
 
 
     def update_excluded_filename_patterns(self, excluded_filename_patterns):
         self.excluded_filename_patterns = excluded_filename_patterns
 
-
 def should_be_excluded(relative_file_name, excluded_filename_patterns):
-    bn = os.path.basename(relative_file_name)
+    if relative_file_name.startswith(".") \
+           or len(relative_file_name) == 0 \
+           or ".clash_" in relative_file_name:
+        return True
+
+    basename = os.path.basename(relative_file_name)
     for pattern in excluded_filename_patterns:
-        if pattern.search(bn):
+        if pattern.search(basename):
             return True
+
+    if basename in [".DS_Store"]:
+        return True
+
     return False
 
 def get_suffix(relative_file_name):
@@ -152,15 +152,15 @@ def get_suffix(relative_file_name):
     return extension
 
 
-def make_remote_subversion_directory_for(relative_file_name, remote_subversion_repo_url, user, passwd, verifySetting):
-    output = requests.request('MKCOL', remote_subversion_repo_url + relative_file_name.replace(os.sep, "/"),
+def make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting):
+    output = requests.request('MKCOL', remote_subversion_repo_url + dir.replace(os.sep, "/"),
                               auth=(user, passwd), verify=verifySetting).content
     if "\nFile not found:" in output:
-        make_remote_subversion_directory_for(dirname(relative_file_name), remote_subversion_repo_url, user, passwd, verifySetting)  # parent
-        make_remote_subversion_directory_for(relative_file_name, remote_subversion_repo_url, user, passwd, verifySetting)  # try this one again
-        debug(relative_file_name + ": MKCOL" )
+        make_remote_subversion_directory_for(dirname(dir), remote_subversion_repo_url, user, passwd, verifySetting)  # parent
+        make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)  # try this one again
+        debug(dir + ": MKCOL" )
 
-def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting):
+def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting, files_table):
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(1)
     s2 = os.path.getsize(abs_local_file_path)
@@ -170,15 +170,19 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
     # TODO has it changed on server
     with open(abs_local_file_path, "rb") as f:
         url = remote_subversion_repo_url + relative_file_name.replace(os.sep, "/")
+
+        dir = dirname(relative_file_name)
+
+        File = Query()
+        search = files_table.search(File.relativeFileName == dir)
+        if requests.head(remote_subversion_repo_url + dir.replace(os.sep, "/"), auth=(user, passwd), verify=verifySetting).status_code == 404:
+            make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)
+
         put = requests.put(url, auth=(user, passwd), data=f.read(), verify=verifySetting)
         output = put.content
         local_file = calculate_sha1_from_local_file(
             absolute_local_root_path + relative_file_name)
         debug(absolute_local_root_path + relative_file_name + ": PUT " + str(put.status_code) + ", sha1:" + local_file)
-        if put.status_code == 404:
-            make_remote_subversion_directory_for(dirname(get_relative_file_name(abs_local_file_path, absolute_local_root_path)),
-                                                 remote_subversion_repo_url, user, passwd, verifySetting)
-            output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting)
         if put.status_code == 201 or put.status_code == 204:
             return ""
         return output
@@ -187,8 +191,7 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
-        relative_file_name = relative_file_name.replace("&amp;","&")
-#        print "rel nam:" + relative_file_name
+        relative_file_name = un_encode_path(relative_file_name)
         if relative_file_name.startswith(".") \
                 or len(relative_file_name) == 0 \
                 or should_be_excluded(relative_file_name, excluded_filename_patterns):
@@ -210,6 +213,10 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
     File = Query()
     files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
+
+
+def un_encode_path(relative_file_name):
+    return relative_file_name.replace("&amp;", "&")
 
 
 def extract_name_type_rev(entry_xml_element):
@@ -284,8 +291,6 @@ def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
 def update_row_shas(files_table, relative_file_name, sha1):
     File = Query()
     foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1}, File.relativeFileName == relative_file_name)
-    # print "update_row_shas: " + str(foo) + " " + relative_file_name + ": " + sha1 + " --- " + prt_files_table_for(files_table, relative_file_name)
-
 
 def prt_files_table_for(files_table, relative_file_name):
     return str(files_table.search(Query().relativeFileName == relative_file_name))
@@ -383,7 +388,7 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
 
     for line in output.splitlines():
         if ":baseline-relative-path>" in line:
-            path = extract_path_from_baseline_rel_path(baseline_relative_path, line)
+            path = un_encode_path(extract_path_from_baseline_rel_path(baseline_relative_path, line))
         if ":version-name" in line:
             rev = int(line[line.index(">") + 1:line.index("<", 3)])
         if ":sha1-checksum>" in line:
@@ -426,7 +431,7 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
             # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
             # don't do it.
         else:
-            output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting)  # <h1>Created</h1>
+            output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting, files_table)  # <h1>Created</h1>
 
             if "txn-current-lock': Permission denied" in output:
                 print "User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo"
@@ -436,7 +441,7 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
             if output == "":
                 add_changes += 1
-                update_instruction_in_table(files_table, None, rel_file_name)
+        update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
         print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
 

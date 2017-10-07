@@ -48,7 +48,7 @@ from random import randint
 from boltons.setutils import IndexedSet
 import requests
 import requests.packages.urllib3
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 from os.path import splitext
 import datetime
@@ -86,10 +86,10 @@ def calculate_sha1_from_local_file(file):
     return hexdigest
 
 
-class FileSystemNotificationHandler(FileSystemEventHandler):
+class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher):
-        super(FileSystemNotificationHandler, self).__init__()
+        super(FileSystemNotificationHandler, self).__init__(ignore_patterns=["*/.*"])
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
         self.absolute_local_root_path = absolute_local_root_path
         self.file_system_watcher = file_system_watcher
@@ -110,14 +110,14 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
 
-        #print "on_add: " + relative_file_name
+        # print("on_add: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "add_" + ("dir" if event.is_directory else "file")))
 
     def on_deleted(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        #print "on_del: " + relative_file_name
+        #print("on_del: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     def on_modified(self, event):
@@ -128,7 +128,7 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
             add_queued = (relative_file_name, "add_file") in self.local_adds_chgs_deletes_queue
             chg_queued = (relative_file_name, "change") in self.local_adds_chgs_deletes_queue
             if not add_queued and not chg_queued:
-                print("on_chg: " + event.src_path)
+                # print("on_chg: " + event.src_path)
                 self.local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
 
 

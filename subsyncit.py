@@ -154,7 +154,7 @@ def get_suffix(relative_file_name):
 
 def make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting):
     output = requests.request('MKCOL', remote_subversion_repo_url + dir.replace(os.sep, "/"),
-                              auth=(user, passwd), verify=verifySetting).content
+                              auth=(user, passwd), verify=verifySetting).content.decode('utf-8')
     if "\nFile not found:" in output:
         make_remote_subversion_directory_for(dirname(dir), remote_subversion_repo_url, user, passwd, verifySetting)  # parent
         make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)  # try this one again
@@ -179,7 +179,7 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
             make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)
 
         put = requests.put(url, auth=(user, passwd), data=f.read(), verify=verifySetting)
-        output = put.content
+        output = put.content.decode('utf-8')
         local_file = calculate_sha1_from_local_file(
             absolute_local_root_path + relative_file_name)
         debug(absolute_local_root_path + relative_file_name + ": PUT " + str(put.status_code) + ", sha1:" + local_file)
@@ -375,13 +375,13 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
     propfind = requests.request('PROPFIND', url, auth=(user, passwd), data=PROPFIND,
                                 headers={'Depth': 'infinity'}, verify=verifySetting)
 
-    output = propfind.content
+    output = propfind.content.decode('utf-8')
 
     if "PROPFIND requests with a Depth of \"infinity\"" in output:
-        print "'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
+        print("'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
               "the server (in httpd.conf propbably). Refer to " \
               "https://github.com/paul-hammant/subsyncit/blob/master/SERVER-SETUP.md. " \
-              "Subsyncit is refusing to run."
+              "Subsyncit is refusing to run.")
         exit(1)
 
     entries = []; path = ""; rev = -1; sha1 = None
@@ -435,16 +435,16 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
             output = put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting, files_table)  # <h1>Created</h1>
 
             if "txn-current-lock': Permission denied" in output:
-                print "User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo"
+                print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
             elif not output == "":
-                print("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]")
+                print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
             if "... still being written to" not in output:
                 update_sha_and_revision_for_row(files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting)
             if output == "":
                 add_changes += 1
         update_instruction_in_table(files_table, None, rel_file_name)
     if add_changes > 0:
-        print("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion")
+        print(("Pushed " + str(add_changes) + " add(s) or change(s) to Subversion"))
 
 
 def update_sha_and_revision_for_row(files_table, relative_file_name, local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting):
@@ -452,10 +452,10 @@ def update_sha_and_revision_for_row(files_table, relative_file_name, local_sha1,
     elements_for = svn_metadata_xml_elements_for(name, baseline_relative_path, user, passwd, verifySetting)
     i = len(elements_for)
     if i > 1:
-        print("elements found == " + str(i))
+        print(("elements found == " + str(i)))
     for relative_file_name2, rev, sha1 in elements_for:
         if local_sha1 != sha1:
-            print("SHA1s don't match when they should for " + relative_file_name2 + " " + str(sha1) + " " + local_sha1)
+            print(("SHA1s don't match when they should for " + relative_file_name2 + " " + str(sha1) + " " + local_sha1))
         update_row_shas(files_table, relative_file_name2, local_sha1)
         update_row_revision(files_table, relative_file_name2, rev)
 
@@ -486,7 +486,7 @@ def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_rep
         # print "D ROW: " + str(row)
         row_ = row['relativeFileName']
         requests_delete = requests.delete(remote_subversion_repo_url + row_.replace(os.sep, "/"), auth=(user, passwd), verify=verifySetting)
-        output = requests_delete.content
+        output = requests_delete.content.decode('utf-8')
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
             File = Query()
@@ -497,10 +497,10 @@ def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_rep
             # TODO LIKE
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
-            print("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]")
+            print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if deletes > 0:
-        print("Pushed " + str(deletes) + " delete(s) to Subversion")
+        print(("Pushed " + str(deletes) + " delete(s) to Subversion"))
 
 
 
@@ -514,7 +514,7 @@ def get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, pa
         propfind = requests.request('PROPFIND', url, auth=(user, passwd), data=PROPFIND,
                                     headers={'Depth': '0'}, verify=verifySetting)
         if 200 <= propfind.status_code <= 299:
-            output = propfind.content
+            output = propfind.content.decode('utf-8')
 
             for line in output.splitlines():
                 if ":baseline-relative-path" in line and "baseline-relative-path/>" not in line:
@@ -531,7 +531,7 @@ def get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, pa
             output = "PROPFIND status: " + str(propfind.status_code) + " for: " + remote_subversion_repo_url + " user: " + user
         if ver == -1:
             write_error(absolute_local_root_path, output)
-    except requests.exceptions.ConnectionError, e:
+    except requests.exceptions.ConnectionError as e:
         write_error(absolute_local_root_path, "Could be offline? " + repr(e))
     return (ver, sha1, baseline_relative_path)
 
@@ -587,8 +587,8 @@ def print_rows(files_table):
         print("All Items, as per 'files' table:")
         print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, instruction")
         for row in files_table_all:
-            print("  " + row['relativeFileName'] + ", " + str(row['isFile']) + ", " + str(row['repoRev']) + ", " +
-                  str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['instruction']))
+            print(("  " + row['relativeFileName'] + ", " + str(row['isFile']) + ", " + str(row['repoRev']) + ", " +
+                  str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['instruction'])))
 
 
 def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
@@ -635,13 +635,13 @@ def get_excluded_filename_patterns(remote_subversion_repo_url, user, passwd, ver
         get = requests.get(remote_subversion_repo_url + ".subsyncit-excluded-filename-patterns", auth=(user, passwd),
                            verify=verifySetting)
         if (get.status_code == 200):
-            lines = get.content.splitlines()
+            lines = get.content.decode('utf-8').splitlines()
             regexes = []
             for line in lines:
                 regexes.append(re.compile(line))
             return regexes
         return []
-    except requests.exceptions.ConnectionError, e:
+    except requests.exceptions.ConnectionError as e:
         return []
 
 def main(argv):
@@ -741,7 +741,7 @@ def main(argv):
 #            print_rows(files_table)
             iteration += 1
     except KeyboardInterrupt:
-        print "CTRL-C, Shutting down..."
+        print("CTRL-C, Shutting down...")
         pass
     file_system_watcher.stop()
     try:

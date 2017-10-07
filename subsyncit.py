@@ -394,7 +394,8 @@ def svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, ver
         if ":sha1-checksum>" in line:
             sha1 = line[line.index(">") + 1:line.index("<", 3)]
         if "</D:response>" in line:
-            entries.append ((path, rev, sha1))
+            if path != "":
+                entries.append ((path, rev, sha1))
             path = ""; rev = -1; sha1 = None
 
     # debug(path + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1))

@@ -125,8 +125,11 @@ class FileSystemNotificationHandler(FileSystemEventHandler):
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
-            # print("on_chg: " + event.src_path)
-            self.local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
+            add_queued = (relative_file_name, "add_file") in self.local_adds_chgs_deletes_queue
+            chg_queued = (relative_file_name, "change") in self.local_adds_chgs_deletes_queue
+            if not add_queued and not chg_queued:
+                print("on_chg: " + event.src_path)
+                self.local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
 
 
     def update_excluded_filename_patterns(self, excluded_filename_patterns):
@@ -590,7 +593,6 @@ def instruction_for_file(files_table, relative_file_name):
     if len(rows) == 0:
         return None
     else:
-        print("row = " + str(rows[0]))
         return rows[0]['instruction']
 
 def print_rows(files_table):

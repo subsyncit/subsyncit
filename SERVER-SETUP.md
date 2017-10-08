@@ -107,9 +107,9 @@ MS Office stores data temporarily per file currently being edited. It deletes th
 
 # Different choices for Apache2/Subversion servers:
 
-1. [Bitnami-Cloud-Server-Setup](/paul-hammant/subsyncit/wiki/Bitnami-Cloud-Server-Setup) - for Amazon's EC2 platform, Google Cloud (and others)
+1. [Bitnami-Cloud-Server-Setup](https://github.com//paul-hammant/subsyncit/wiki/Bitnami-Cloud-Server-Setup) - for Amazon's EC2 platform, Google Cloud (and others)
 2. Inexpensive SFF PC with 4TB USB hard drive - done, but writeup needed
-3. [Raspberry Pi 0 W with 200GB SD card](/paul-hammant/subsyncit/wiki/Raspberry-PI-Zero-W-~-Raspbian-Stretch) - a cheap and small hardware choice
-4. [Docker deployment](/paul-hammant/subsyncit/wiki/Dockerized-Server) - no SSL, one user created by default
+3. [Raspberry Pi 0 W with 200GB SD card](https://github.com//paul-hammant/subsyncit/wiki/Raspberry-PI-Zero-W-~-Raspbian-Stretch) - a cheap and small hardware choice
+4. [Docker deployment](https://github.com//paul-hammant/subsyncit/wiki/Dockerized-Server) - no SSL, one user created by default
 4. Using Subsyncit with Assembla's cloud service - TODO
 5. Using Subsyncit with a RhodeCode install - TODO

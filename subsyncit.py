@@ -156,12 +156,15 @@ def get_suffix(relative_file_name):
 
 
 def make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting):
-    output = requests.request('MKCOL', remote_subversion_repo_url + dir.replace(os.sep, "/"),
-                              auth=(user, passwd), verify=verifySetting).content.decode('utf-8')
-    if "\nFile not found:" in output:
+    request = requests.request('MKCOL', remote_subversion_repo_url + dir.replace(os.sep, "/"), auth=(user, passwd), verify=verifySetting)
+    rc = request.status_code
+    if rc == 201:
+        return
+    if rc == 404:
         make_remote_subversion_directory_for(dirname(dir), remote_subversion_repo_url, user, passwd, verifySetting)  # parent
         make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)  # try this one again
-        debug(dir + ": MKCOL" )
+        return
+    print("Unexpected MKCOL response " + str(rc))
 
 
 def esc(name):
@@ -169,8 +172,9 @@ def esc(name):
 
 def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting, files_table):
     s1 = os.path.getsize(abs_local_file_path)
-    time.sleep(1)
+    time.sleep(0.1)
     s2 = os.path.getsize(abs_local_file_path)
+    # print("Sleep 0.1 sec, diff? " + str(s1 != s2))
     if s1 != s2:
         return "... still being written to"
     relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
@@ -360,14 +364,16 @@ def delete_file_and_entries_in_table(files_table, relative_file_name, absolute_l
         except OSError:
             pass
     parent = os.path.dirname(relative_file_name)
-    listdir = os.listdir(absolute_local_root_path + parent)
-    if len(listdir) == 0:
-        try:
-            shutil.rmtree(absolute_local_root_path + parent)
-            File = Query()
-            files_table.remove(File.relativeFileName == parent)
-        except OSError:
-            pass
+    path_parent = absolute_local_root_path + parent
+    if os.path.exists(path_parent):
+        listdir = os.listdir(path_parent)
+        if len(listdir) == 0:
+            try:
+                shutil.rmtree(path_parent)
+                File = Query()
+                files_table.remove(File.relativeFileName == parent)
+            except OSError:
+                pass
 
 def get_relative_file_name(full_path, absolute_local_root_path):
     if not full_path.startswith(absolute_local_root_path):
@@ -422,7 +428,7 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(files_table, remote_subversion_repo_url, user, passwd, baseline_relative_path, absolute_local_root_path, verifySetting):
+def perform_puts_on_remote_subversion_repo_if_shas_are_different(files_table, remote_subversion_repo_url, user, passwd, baseline_relative_path, absolute_local_root_path, verifySetting):
 
     File = Query()
     rows = files_table.search(File.instruction == "PUT")
@@ -475,17 +481,21 @@ def update_revisions_for_created_directories(files_table, remote_subversion_repo
     File = Query()
     rows = files_table.search(File.instruction == 'MKCOL')
 
-    msg_done = False
-    for row in rows:
-        if not msg_done:
-            print("Getting Revisions for created dirs from Subversion")
-            msg_done = True
-        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, passwd, row[0], absolute_local_root_path, verifySetting)
-        update_row_revision(files_table, row['relativeFileName'], rev=revn)
-        update_instruction_in_table(files_table, None, row['relativeFileName'])
+    start = time.time()
 
+    for row in rows:
+        relative_file_name = row['relativeFileName']
+        print("update_revisions_for_created_directories= " + relative_file_name)
+        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, passwd, relative_file_name, absolute_local_root_path, verifySetting)
+        update_row_revision(files_table, relative_file_name, rev=revn)
+        update_instruction_in_table(files_table, None, relative_file_name)
+
+    print("Got revisions for " + str(len(rows)) + " created dirs from Subversion - " + str(int(1000 * (time.time() - start))) + " ms")
 
 def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_repo_url, user, passwd, verifySetting):
+
+    print("Puts ...")
+    start = time.time()
 
     File = Query()
     rows = files_table.search(File.instruction == 'DELETE ON REMOTE')
@@ -508,6 +518,8 @@ def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_rep
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
+
+    print("PUTs - " + str(time.time() - start) + " secs")
 
     if deletes > 0:
         print(("Pushed " + str(deletes) + " delete(s) to Subversion"))
@@ -743,7 +755,7 @@ def main(argv):
                     update_revisions_for_created_directories(files_table, args.remote_subversion_repo_url, args.user, passwd, args.absolute_local_root_path, verifySetting)
                     last_root_revision = root_revision_on_remote_svn_repo
                 process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(files_table, args.remote_subversion_repo_url, args.user, passwd, baseline_relative_path, args.absolute_local_root_path, verifySetting)
+                perform_puts_on_remote_subversion_repo_if_shas_are_different(files_table, args.remote_subversion_repo_url, args.user, passwd, baseline_relative_path, args.absolute_local_root_path, verifySetting)
                 perform_deletes_on_remote_subversion_repo(files_table, args.remote_subversion_repo_url, args.user, passwd, verifySetting)
                 # TODO calc right ?
                 if time.time() - last_missed_time > 60:

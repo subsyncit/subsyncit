@@ -91,7 +91,15 @@ compression-level = 0
 
 # Excluding temp files from syncing
 
+Subsyncit ignores some fies by default. Such as the `.DS_Store` folders from Spotlight on the Mac.
+It also ignores files starting with `.` generally (meaning "hidden" on Mac
+and Linux). Subsyncit administrators can checking a file called `.subsyncit-excluded-filename-patterns`
+to root folder of the repository which can contain extra regex masks for files to ignore in any directory.
+In that file, there should be one regex per line.
+
 ## Microsoft Office
+
+MS Office stores data temporarily per file currently being edited. It deletes those files when editing is complete. Lines you'll need to add:
 
 ```
 \~\$.*

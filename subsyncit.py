@@ -163,6 +163,10 @@ def make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, 
         make_remote_subversion_directory_for(dir, remote_subversion_repo_url, user, passwd, verifySetting)  # try this one again
         debug(dir + ": MKCOL" )
 
+
+def esc(name):
+    return name.replace("?", "%3F").replace("&", "%26")
+
 def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversion_repo_url, user, passwd, absolute_local_root_path, verifySetting, files_table):
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(1)
@@ -172,7 +176,7 @@ def put_item_in_remote_subversion_directory(abs_local_file_path, remote_subversi
     relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
     # TODO has it changed on server
     with open(abs_local_file_path, "rb") as f:
-        url = remote_subversion_repo_url + relative_file_name.replace(os.sep, "/")
+        url = remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/")
 
         dir = dirname(relative_file_name)
 
@@ -205,7 +209,6 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
         if len(rows) > 0:
             if rows[0]['remoteSha1'] != sha1:
                 update_instruction_in_table(files_table, "GET", relative_file_name)
-#               else:
             else:
                 localSha1 = calculate_sha1_from_local_file(absolute_local_root_path + relative_file_name)
                 if rows[0]['localSha1'] == localSha1:
@@ -219,7 +222,7 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
 
 
 def un_encode_path(relative_file_name):
-    return relative_file_name.replace("&amp;", "&")
+    return relative_file_name.replace("&amp;", "&").replace("&quot;", "\"")
 
 
 def extract_name_type_rev(entry_xml_element):
@@ -238,7 +241,7 @@ def sync_remote_adds_and_changes_to_local(files_table, remote_subversion_repo_ur
         old_sha1_should_be = row['localSha1']
         # print "get cycle old sha " + absolute_local_root_path + " " + str(old_sha1_should_be)
         abs_local_file_path = (absolute_local_root_path + relative_file_name)
-        head = requests.head(remote_subversion_repo_url + relative_file_name,
+        head = requests.head(remote_subversion_repo_url + esc(relative_file_name),
                              auth=(user, passwd),
                              verify=verifySetting)
 
@@ -254,7 +257,7 @@ def sync_remote_adds_and_changes_to_local(files_table, remote_subversion_repo_ur
                 absolute_local_root_path, verifySetting)
 
             get = requests.get(
-                remote_subversion_repo_url + relative_file_name.replace(os.sep,
+                remote_subversion_repo_url + esc(relative_file_name).replace(os.sep,
                                                                         "/"),
                 auth=(user, passwd),
                 verify=verifySetting, stream=True)
@@ -455,8 +458,8 @@ def perform_adds_and_changes_on_remote_subversion_repo_if_shas_are_different(fil
 
 
 def update_sha_and_revision_for_row(files_table, relative_file_name, local_sha1, remote_subversion_repo_url, user, passwd, baseline_relative_path, verifySetting):
-    name = remote_subversion_repo_url + relative_file_name
-    elements_for = svn_metadata_xml_elements_for(name, baseline_relative_path, user, passwd, verifySetting)
+    url = remote_subversion_repo_url + esc(relative_file_name)
+    elements_for = svn_metadata_xml_elements_for(url, baseline_relative_path, user, passwd, verifySetting)
     i = len(elements_for)
     if i > 1:
         print(("elements found == " + str(i)))
@@ -491,8 +494,8 @@ def perform_deletes_on_remote_subversion_repo(files_table, remote_subversion_rep
     for row in rows:
         deletes += 1
         # print "D ROW: " + str(row)
-        row_ = row['relativeFileName']
-        requests_delete = requests.delete(remote_subversion_repo_url + row_.replace(os.sep, "/"), auth=(user, passwd), verify=verifySetting)
+        rfn = row['relativeFileName']
+        requests_delete = requests.delete(remote_subversion_repo_url + esc(rfn).replace(os.sep, "/"), auth=(user, passwd), verify=verifySetting)
         output = requests_delete.content.decode('utf-8')
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
@@ -517,7 +520,7 @@ def get_remote_subversion_repo_revision_for(remote_subversion_repo_url, user, pa
     baseline_relative_path = ""
     output = ""
     try:
-        url = remote_subversion_repo_url + relative_file_name.replace("\\", "/")
+        url = remote_subversion_repo_url + esc(relative_file_name).replace("\\", "/")
         propfind = requests.request('PROPFIND', url, auth=(user, passwd), data=PROPFIND,
                                     headers={'Depth': '0'}, verify=verifySetting)
         if 200 <= propfind.status_code <= 299:
@@ -595,7 +598,7 @@ def instruction_for_file(files_table, relative_file_name):
         return rows[0]['instruction']
 
 def print_rows(files_table):
-    files_table_all = files_table.all()
+    files_table_all = sorted(files_table.all(), key=lambda k: k['relativeFileName'])
     if len(files_table_all) > 0:
         print("All Items, as per 'files' table:")
         print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, instruction")

@@ -13,7 +13,7 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import copy
 import fileinput
 import getpass
 import threading
@@ -151,12 +151,12 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             with open(dir + "control", "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
 
-            time.sleep(10)
-
             self.assertEqual(
                 requests.get(self.svn_repo + self.rel_dir_1 + "control",
                                  auth=(self.user, self.passwd), verify=False)
                     .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
+
+            time.sleep(10)
 
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
@@ -165,6 +165,65 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+
+    @timedtest
+    def test_a_files_with_special_characters_make_it_to_svn_and_back(self):
+
+        # It is alleged that some characters are not allowed in right-of-the-port-number paths.
+        # Between them Apache2 and Subversion munge a few for display purposes. That's either on the way into Subversion,
+        # or on the way back over HTTP into the file system. No matter - the most important representation of file name
+        # is in the file system, and we only require consistent GET/PUT from/to that.
+
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
+
+        dir = IntegrationTestsOfSyncOperations.testSyncDir1
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+        try:
+            files = ["a&a", "b{b", "c?c", "d$d", "e;e", "f=f", "g+g", "h,h",
+                  "i(i", "j)j", "k[k", "l]l", "m:m", "n\'n", "o\"o", "p`p", "q*q", "r~r"]
+            for f in files:
+                with open(dir + f, "w", encoding="utf-8") as text_file:
+                    text_file.write("Hello")
+
+            self.expect201(
+                requests.put(self.svn_repo + self.rel_dir_1 + "CONTROL",
+                             auth=(self.user, self.passwd), data="Hello",
+                             verify=False))
+
+            start = time.time()
+            elapsed = 0
+
+            files_not_found_in_subversion = copy.deepcopy(files)
+
+            while len(files) > 1 and elapsed < 90:
+                files2 = copy.deepcopy(files_not_found_in_subversion)
+                for f in files2:
+                    if requests.get(self.svn_repo + self.rel_dir_1 + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
+                        files_not_found_in_subversion.remove(f)
+                elapsed = time.time() - start
+
+            self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
+
+            # `?` isn't handled seamlessly by the requests library
+            if requests.get(self.svn_repo + self.rel_dir_1 + "c?c".replace("?", "%3f"),
+                            auth=(self.user, self.passwd),
+                            verify=False).status_code == 200:
+                files_not_found_in_subversion.remove("c?c")
+
+            self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion))
+
+            # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
+            self.assertEquals(str(sorted(
+                os.listdir(IntegrationTestsOfSyncOperations.testSyncDir1))),
+                "['.subsyncit.db', 'CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']")
+
+
+        finally:
+            self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
 
     @timedtest
     def test_a_deleted_file_syncs_down(self):

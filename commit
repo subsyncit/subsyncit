@@ -36,7 +36,7 @@ for line in changeset.splitlines():
 
     if "modified:   subsyncit.py" in line:
         if changes_not_staged_for_commit and sys.argv[1] != "-am":
-            print "subsyncit.py modified, but you need to git-add it. Not committing"
+            print("subsyncit.py modified, but you need to git-add it. Not committing")
             exit(1)
         subsyncit_modified = True
 

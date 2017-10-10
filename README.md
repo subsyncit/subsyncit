@@ -37,20 +37,20 @@ There are none as Subsyncit does not have a user interface (yet).
 
 # Overview
 
-## Features in common with all file-sync technologies:
+## Features in common with all file-sync technologies
 
 * Brings down added/changed/deleted files from the remote Subversion repo to the client's local sync directory.
 * Pushed up added/changed/deleted files from your client's local sync directory to the remote Subversion repo on the server.
 * Several people can maintain separate local sync directories and share files on a remote Subversion repo.
 * The server always wins; the software simply renames the local file out of the way. Though there's a possibility that for text-forms a three-way merge could be performed (TODO)
 
-## Additional features expected because Subversion is the backing store:
+## Additional features expected because Subversion is the backing store
 
 * Keeps an audit trail (historical versions)
 * Whole directory trees can be checked out en-masse, worked on, and committed back (per normal Svn workflow)
 * Branches are a configuration choice for novel usages.
 
-## Why not use a different VCS backing store.
+## Why not use a different VCS backing store?
 
 * Subversion speaks WebDAV meaning very simple client technologies can connect
 * Subversion allows direct remote access to any resource (or history of the same) without a clone and without a lasting cost to the server
@@ -63,7 +63,7 @@ There are none as Subsyncit does not have a user interface (yet).
   * therefore there is only one version of each file on the client system, which is important for large binaries
 * No Subversion install on client (if that wasn't obvious)
 
-## Working so far:
+## Working so far
 
 1. Two-way syncing of add/changes/deletes, including directories, and timer based polling of remote Subversion repo for changes over time.
 2. Deliberate 'quiet time' after a local change detected, in in order to not push a partially complete file-write to the remote Subversion repo.

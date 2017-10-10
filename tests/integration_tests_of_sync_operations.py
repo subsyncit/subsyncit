@@ -24,8 +24,8 @@ import requests
 import sh
 from decorator import decorator
 
-from test.base_sync_test import BaseSyncTest
-from test.recreate_svn_repo import make_or_wipe_server_side_subversion_repo
+from base_sync_test import BaseSyncTest
+from recreate_svn_repo import make_or_wipe_server_side_subversion_repo
 
 
 class IntegrationTestsOfSyncOperations(BaseSyncTest):
@@ -580,7 +580,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
     def make_a_big_random_file(self, filename, start, size):
         print("Making " + size + "MB random file ... ")
-        sh.bash("./make_a_so_big_file.sh", filename, size)
+        sh.bash("tests/make_a_so_big_file.sh", filename, size)
         print(" ... secs: " + str(round(time.time() - start, 1)))
 
     def list_files(self, root):

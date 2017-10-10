@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+'''
+
+This script is not used by Subsyncit itself.
+
+It is used when I check in Subsyncit so that there's a version number in the
+source file. This is relevant as Python is a language that leaps into being
+based on source files (unlike Java an its .class files), and I wanted to
+have a version number in there just in case I'm supporting something.
+
+'''
+
+
 from datetime import datetime
 import sh
 import sys

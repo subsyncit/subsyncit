@@ -14,23 +14,18 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import copy
-import fileinput
 import getpass
-import threading
+import os
 import time
 import unittest
-from decorator import decorator
-import os
 
 import glob2
 import requests
 import sh
-import pprint
-from tinydb import TinyDB, Query
+from decorator import decorator
 
-import subsyncit
-from base_sync_test import BaseSyncTest
-from recreate_svn_repo import make_or_wipe_server_side_subversion_repo
+from test.base_sync_test import BaseSyncTest
+from test.recreate_svn_repo import make_or_wipe_server_side_subversion_repo
 
 
 class IntegrationTestsOfSyncOperations(BaseSyncTest):
@@ -151,12 +146,10 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             with open(dir + "control", "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
 
-            self.assertEqual(
-                requests.get(self.svn_repo + self.rel_dir_1 + "control",
-                                 auth=(self.user, self.passwd), verify=False)
-                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
-
             time.sleep(10)
+
+            rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
+            self.assertEqual(rc, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
 
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
@@ -442,7 +435,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1 = self.start_subsyncit("https://example.com/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="dontLeakRealPasswordToExampleDotCom")
         try:
-            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 405 for: https://example.com/ user: paul")
+            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 405 for: https://example.com/")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -452,7 +445,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 401 for: " + self.svn_repo + "integrationTests/" + " user: " + self.user)
+            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 401 for: " + self.svn_repo + "integrationTests/")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 

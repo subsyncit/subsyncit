@@ -44,6 +44,7 @@ import shutil
 import sys
 import time
 from os.path import dirname, splitext
+from time import strftime
 
 import requests
 import requests.packages.urllib3
@@ -194,9 +195,11 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         if put.status_code == 201 or put.status_code == 204:
             return ""
         return output
-    
 
-def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path, excluded_filename_patterns):
+
+def create_GETs_and_local_deletes_instructions(files_table, all_entries, absolute_local_root_path, excluded_filename_patterns):
+    start = time.time()
+
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
@@ -211,16 +214,26 @@ def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_p
         if len(rows) > 0:
             if rows[0]['remoteSha1'] != sha1:
                 update_instruction_in_table(files_table, "GET", relative_file_name)
+                # print(' Gn:' + relative_file_name, end='')
             else:
+                # TODO - should use something quicker that SHA1 recalc
                 localSha1 = calculate_sha1_from_local_file(absolute_local_root_path + relative_file_name)
                 if rows[0]['localSha1'] == localSha1:
+                    # print(' n:' + relative_file_name, end='')
                     update_instruction_in_table(files_table, None, relative_file_name)
                 else:
+                    # print(' P:' + relative_file_name, end='')
                     update_instruction_in_table(files_table, "PUT", relative_file_name)
         else:
+            # print(' Gn:' + relative_file_name, end='')
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
+        # sys.stdout.flush()
     File = Query()
     files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
+
+    duration = time.time() - start
+    if duration > 1:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": GET and local delete instruction creation (from analysis of all files up on Svn) took " + str(round(duration, 2)) + " secs.")
 
 
 def un_encode_path(relative_file_name):
@@ -278,14 +291,16 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
             update_row_revision(files_table, relative_file_name, repoRev)
         update_instruction_in_table(files_table, None, relative_file_name)
 
-        if len(rows) > 0:
-            print("GETs from Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows))
-                  + " files via GET (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+    if len(rows) > 0:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows))
+              + " files via GET (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
 
             # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
 
 
-def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
+def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
+
+    start = time.time()
 
     File = Query()
     rows = files_table.search(File.instruction == 'DELETE LOCALLY')
@@ -325,6 +340,9 @@ def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
                 except OSError:
                     pass
 
+    duration = time.time() - start
+    if duration > 1:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + str(round(duration, 2)) + " secs.")
 
 
 def update_row_shas(files_table, relative_file_name, sha1):
@@ -412,7 +430,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     duration = time.time() - start
     if duration > 0.1:
-        print("PROFIND (root/all) on Svn repo took " + str(round(duration, 2)) + " secs")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + str(round(duration, 2)) + " secs, for " + str(len(entries)) + " entries.")
 
     return entries
 
@@ -467,7 +485,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
         update_instruction_in_table(files_table, None, rel_file_name)
 
     if len(rows) > 0:
-        print("PUTs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(put_count)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(put_count)
               + " PUT files, " + str(not_actually_changed) + " not actually changed (from " + str(len(rows)) + " possible), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
 def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path):
@@ -498,7 +516,8 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print("MKCOLs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + " MKCOLs/sec.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
+                                                                                                                                                                                     start), 2)) + " MKCOLs/sec.")
 
 
 def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, remote_subversion_repo_url):
@@ -526,7 +545,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        print("DELETEs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, "
+        print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, "
               + str(int(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
@@ -572,8 +591,12 @@ def sleep_a_little(sleep_secs):
     time.sleep(sleep_secs)
 
 
-def process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue, sync_dir):
-    while len(local_adds_chgs_deletes_queue) > 0:
+def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
+
+    start = time.time()
+
+    initial_queue_length = len(local_adds_chgs_deletes_queue)
+    while initial_queue_length > 0:
         (relative_file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
             upsert_row_in_table(files_table, relative_file_name, "-1", "dir", instruction="MKCOL")
@@ -591,6 +614,9 @@ def process_queued_local_sync_directory_adds_changes_and_deletes(files_table, lo
                 update_instruction_in_table(files_table, "DELETE ON REMOTE", relative_file_name)
         else:
             raise Exception("Unknown action " + action)
+
+    if len(initial_queue_length) > 0:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + str(round(time.time() - start, 2)) + " secs.")
 
 
 def file_is_in_subversion(files_table, relative_file_name):
@@ -755,14 +781,16 @@ def main(argv):
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
+                # Things indicated by Subversion server first
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url, baseline_relative_path)
-                    enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path, excluded_filename_patterns)
+                    create_GETs_and_local_deletes_instructions(files_table, all_entries, args.absolute_local_root_path, excluded_filename_patterns)
                     perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
-                    sync_remote_deletes_to_local(files_table, args.absolute_local_root_path)
+                    perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
-                process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                # Local events seconds
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
                 perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
                 # TODO calc right ?
@@ -785,7 +813,7 @@ def main(argv):
     except RuntimeError:
         pass
 
-    debug = True
+    debug = False
 
     if debug:
         print_rows(files_table)

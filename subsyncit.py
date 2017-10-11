@@ -232,7 +232,7 @@ def extract_name_type_rev(entry_xml_element):
     return file_or_dir, relative_file_name, rev
 
 
-def sync_remote_adds_and_changes_to_local(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
+def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
     File = Query()
     rows = files_table.search(File.instruction == "GET")
     for row in rows:
@@ -286,7 +286,40 @@ def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
     rows = files_table.search(File.instruction == 'DELETE LOCALLY')
 
     for row in rows:
-        delete_file_and_entries_in_table(files_table, row['relativeFileName'], absolute_local_root_path, False if row['isFile'] == 1 else True)
+        relative_file_name = row['relativeFileName']
+
+        # TODO confirm via history.
+
+        if row['isFile'] == 0:
+            File = Query()
+            files_table.remove(File.relativeFileName == relative_file_name)
+
+            # TODO LIKE
+
+        else:
+            File = Query()
+            files_table.remove(File.relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
+
+        name = (absolute_local_root_path + relative_file_name)
+        try:
+            os.remove(name)
+        except OSError:
+            try:
+                shutil.rmtree(name)
+            except OSError:
+                pass
+        parent = os.path.dirname(relative_file_name)
+        path_parent = absolute_local_root_path + parent
+        if os.path.exists(path_parent):
+            listdir = os.listdir(path_parent)
+            if len(listdir) == 0:
+                try:
+                    shutil.rmtree(path_parent)
+                    File = Query()
+                    files_table.remove(File.relativeFileName == parent)
+                except OSError:
+                    pass
+
 
 
 def update_row_shas(files_table, relative_file_name, sha1):
@@ -334,38 +367,6 @@ def update_instruction_in_table(files_table, instruction, relative_file_name):
         files_table.update({'instruction': instruction}, File.relativeFileName == relative_file_name)
 
 
-def delete_file_and_entries_in_table(files_table, relative_file_name, absolute_local_root_path, wildcard):
-
-    if wildcard:
-        File = Query()
-        files_table.remove(File.relativeFileName == relative_file_name)
-
-        # TODO LIKE
-
-    else:
-        File = Query()
-        files_table.remove(File.relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
-
-    name = (absolute_local_root_path + relative_file_name)
-    try:
-        os.remove(name)
-    except OSError:
-        try:
-            shutil.rmtree(name)
-        except OSError:
-            pass
-    parent = os.path.dirname(relative_file_name)
-    path_parent = absolute_local_root_path + parent
-    if os.path.exists(path_parent):
-        listdir = os.listdir(path_parent)
-        if len(listdir) == 0:
-            try:
-                shutil.rmtree(path_parent)
-                File = Query()
-                files_table.remove(File.relativeFileName == parent)
-            except OSError:
-                pass
-
 def get_relative_file_name(full_path, absolute_local_root_path):
     if not full_path.startswith(absolute_local_root_path):
         if not (full_path + os.sep).startswith(absolute_local_root_path):
@@ -376,8 +377,10 @@ def get_relative_file_name(full_path, absolute_local_root_path):
     return rel
 
 def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path):
-    propfind = requests_session.request('PROPFIND', url, data=PROPFIND,
-                                headers={'Depth': 'infinity'})
+
+    start = time.time()
+
+    propfind = requests_session.request('PROPFIND', url, data=PROPFIND, headers={'Depth': 'infinity'})
 
     output = propfind.content.decode('utf-8')
 
@@ -402,7 +405,10 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
                 entries.append ((path, rev, sha1))
             path = ""; rev = -1; sha1 = None
 
-    # debug(path + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1))
+    duration = time.time() - start
+    if duration > 0.1:
+        print("PROFIND (root/all) on Svn repo took " + str(round(duration, 1)) + " secs")
+
     return entries
 
 def extract_path_from_baseline_rel_path(baseline_relative_path, line):
@@ -418,11 +424,12 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     #            print "LINE=" + line + ", PATH=" + path + "-" + baseline_relative_path + "-"
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
-
-def perform_puts_on_remote_subversion_repo_if_shas_are_different(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path):
+def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path):
 
     File = Query()
     rows = files_table.search(File.instruction == "PUT")
+
+    start = time.time()
 
     add_changes = 0
     for row in rows:
@@ -453,6 +460,8 @@ def perform_puts_on_remote_subversion_repo_if_shas_are_different(requests_sessio
     if add_changes > 0:
         print(str(add_changes) + " add(s) or change(s) PUT to Subversion")
 
+    if len(rows) > 0:
+        print("PUTs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
 
 def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path):
     url = remote_subversion_repo_url + esc(relative_file_name)
@@ -481,18 +490,18 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_row_revision(files_table, relative_file_name, rev=revn)
         update_instruction_in_table(files_table, None, relative_file_name)
 
-    print("Got revisions for " + str(len(rows)) + " created dirs from Subversion - " + str(int(1000 * (time.time() - start))) + " ms")
+    if len(rows) > 0:
+        print("MKCOLs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
 
-def perform_deletes_on_remote_subversion_repo(requests_session, files_table, remote_subversion_repo_url):
+
+def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, remote_subversion_repo_url):
 
     start = time.time()
 
     File = Query()
     rows = files_table.search(File.instruction == 'DELETE ON REMOTE')
 
-    deletes = 0
     for row in rows:
-        deletes += 1
         # print "D ROW: " + str(row)
         rfn = row['relativeFileName']
         requests_delete = requests_session.delete(remote_subversion_repo_url + esc(rfn).replace(os.sep, "/"))
@@ -509,11 +518,8 @@ def perform_deletes_on_remote_subversion_repo(requests_session, files_table, rem
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
-    print("All PUTs: " + str(int(time.time() - start)) + " secs")
-
-    if deletes > 0:
-        print(("Pushed " + str(deletes) + " delete(s) to Subversion"))
-
+    if len(rows) > 0:
+        print("DELETEs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
 
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path):
@@ -523,8 +529,7 @@ def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_
     output = ""
     try:
         url = remote_subversion_repo_url + esc(relative_file_name).replace("\\", "/")
-        propfind = requests_session.request('PROPFIND', url, data=PROPFIND,
-                                    headers={'Depth': '0'})
+        propfind = requests_session.request('PROPFIND', url, data=PROPFIND, headers={'Depth': '0'})
         if 200 <= propfind.status_code <= 299:
             output = propfind.content.decode('utf-8')
 
@@ -750,13 +755,13 @@ def main(argv):
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url, baseline_relative_path)
                     enque_gets_and_local_deletes(files_table, all_entries, args.absolute_local_root_path, excluded_filename_patterns)
-                    sync_remote_adds_and_changes_to_local(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
+                    perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     sync_remote_deletes_to_local(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
                 process_queued_local_sync_directory_adds_changes_and_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_puts_on_remote_subversion_repo_if_shas_are_different(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
-                perform_deletes_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
+                perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
+                perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
                 # TODO calc right ?
                 if time.time() - last_missed_time > 60:
                     # This is 1) a fallback, in case the watchdog file watcher misses something

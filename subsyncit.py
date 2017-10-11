@@ -197,7 +197,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         return output
 
 
-def create_GETs_and_local_deletes_instructions(files_table, all_entries, absolute_local_root_path, excluded_filename_patterns):
+def create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns):
     start = time.time()
 
     File = Query()
@@ -212,22 +212,12 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, absolut
         File = Query()
         rows = files_table.search(File.relativeFileName == relative_file_name)
         if len(rows) > 0:
-            if rows[0]['remoteSha1'] != sha1:
-                update_instruction_in_table(files_table, "GET", relative_file_name)
-                # print(' Gn:' + relative_file_name, end='')
+            if rows[0]['remoteSha1'] == sha1:
+                update_instruction_in_table(files_table, None, relative_file_name)
             else:
-                # TODO - should use something quicker that SHA1 recalc
-                localSha1 = calculate_sha1_from_local_file(absolute_local_root_path + relative_file_name)
-                if rows[0]['localSha1'] == localSha1:
-                    # print(' n:' + relative_file_name, end='')
-                    update_instruction_in_table(files_table, None, relative_file_name)
-                else:
-                    # print(' P:' + relative_file_name, end='')
-                    update_instruction_in_table(files_table, "PUT", relative_file_name)
+                update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
-            # print(' Gn:' + relative_file_name, end='')
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
-        # sys.stdout.flush()
     File = Query()
     files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
 
@@ -546,7 +536,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, "
-              + str(int(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
+              + str(len(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path):
@@ -596,7 +586,7 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
     start = time.time()
 
     initial_queue_length = len(local_adds_chgs_deletes_queue)
-    while initial_queue_length > 0:
+    while len(local_adds_chgs_deletes_queue) > 0:
         (relative_file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
             upsert_row_in_table(files_table, relative_file_name, "-1", "dir", instruction="MKCOL")
@@ -615,7 +605,7 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
         else:
             raise Exception("Unknown action " + action)
 
-    if len(initial_queue_length) > 0:
+    if len(local_adds_chgs_deletes_queue) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + str(round(time.time() - start, 2)) + " secs.")
 
 
@@ -784,7 +774,7 @@ def main(argv):
                 # Things indicated by Subversion server first
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url, baseline_relative_path)
-                    create_GETs_and_local_deletes_instructions(files_table, all_entries, args.absolute_local_root_path, excluded_filename_patterns)
+                    create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns)
                     perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)

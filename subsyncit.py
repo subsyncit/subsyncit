@@ -48,6 +48,7 @@ from os.path import dirname, splitext
 import requests
 import requests.packages.urllib3
 from boltons.setutils import IndexedSet
+from requests.adapters import HTTPAdapter
 from tinydb import Query, TinyDB
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
@@ -193,6 +194,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         if put.status_code == 201 or put.status_code == 204:
             return ""
         return output
+    
 
 def enque_gets_and_local_deletes(files_table, all_entries, absolute_local_root_path, excluded_filename_patterns):
     File = Query()
@@ -706,11 +708,6 @@ def main(argv):
         except OSError:
             pass
 
-    from requests.adapters import HTTPAdapter
-
-    s = requests.Session()
-    s.mount('http://', HTTPAdapter(max_retries=0))
-    s.mount('https://', HTTPAdapter(max_retries=0))
 
     if not str(args.remote_subversion_repo_url).endswith("/"):
         args.remote_subversion_repo_url += "/"
@@ -746,7 +743,7 @@ def main(argv):
     requests_session.auth = auth
     requests_session.verify = verifySetting
 
-    http_adapter = HTTPAdapter(pool_connections=1)
+    http_adapter = HTTPAdapter(pool_connections=1, max_retries=0)
     requests_session.mount('http://', http_adapter)
     requests_session.mount('https://', http_adapter)
 

@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-05 16:31:28.897613 (UTC)
+# Version: 2017-10-11 20:57:20.831043 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -199,7 +199,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
 def create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns):
     start = time.time()
-
+    get_count = 0
     File = Query()
     files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
@@ -215,15 +215,17 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
             if rows[0]['remoteSha1'] == sha1:
                 update_instruction_in_table(files_table, None, relative_file_name)
             else:
+                get_count += 1
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
     File = Query()
-    files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
+    delete_locally = files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": GET and local delete instruction creation (from analysis of all files up on Svn) took " + english_duration(duration) + ".")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(delete_locally)
+              + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
 
 def english_duration(duration):
@@ -691,8 +693,8 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(add_files) + " missed adds and " + str(changes)
-              + " missed changes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
+              + " missed changes (from analysis of all files in local sync directory) took " + english_duration(duration) + ".")
 
 
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):

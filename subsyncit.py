@@ -223,8 +223,13 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": GET and local delete instruction creation (from analysis of all files up on Svn) took " + str(round(duration, 2)) + " secs.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": GET and local delete instruction creation (from analysis of all files up on Svn) took " + english_duration(duration) + ".")
 
+
+def english_duration(duration):
+    if duration < 90:
+        return str(round(duration, 2)) + " secs"
+    return str(round(duration/60, 2)) + " mins"
 
 def un_encode_path(relative_file_name):
     return relative_file_name.replace("&amp;", "&").replace("&quot;", "\"")
@@ -282,7 +287,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows))
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + str(len(rows))
               + " files via GET (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
 
             # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
@@ -332,7 +337,7 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + str(round(duration, 2)) + " secs.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
 
 
 def update_row_shas(files_table, relative_file_name, sha1):
@@ -420,7 +425,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     duration = time.time() - start
     if duration > 0.1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + str(round(duration, 2)) + " secs, for " + str(len(entries)) + " entries.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
 
     return entries
 
@@ -475,7 +480,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
         update_instruction_in_table(files_table, None, rel_file_name)
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(put_count)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
               + " PUT files, " + str(not_actually_changed) + " not actually changed (from " + str(len(rows)) + " possible), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
 def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path):
@@ -506,7 +511,7 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
                                                                                                                                                                                      start), 2)) + " MKCOLs/sec.")
 
 
@@ -535,7 +540,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, "
+        print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
               + str(len(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
@@ -606,7 +611,7 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
             raise Exception("Unknown action " + action)
 
     if len(local_adds_chgs_deletes_queue) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + str(round(time.time() - start, 2)) + " secs.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
 
 
 def file_is_in_subversion(files_table, relative_file_name):
@@ -639,6 +644,9 @@ def print_rows(files_table):
 
 
 def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
+
+    start = time.time()
+
     for (dir, _, files) in os.walk(absolute_local_root_path):
         for f in files:
             path = os.path.join(dir, f)
@@ -657,10 +665,22 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
                 # if the SHA is unchanged.
                 local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
 
+    duration = time.time() - start
+    if duration > 1:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Missed adds and changes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
+
+
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
+
+    start = time.time()
+
     for row in files_table.all():
         if not os.path.exists(absolute_local_root_path + row['relativeFileName']):
             local_adds_chgs_deletes_queue.add((row['relativeFileName'], "delete"))
+
+    duration = time.time() - start
+    if duration > 1:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Missed deletes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
 
 
 def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
@@ -771,19 +791,18 @@ def main(argv):
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
-                # Things indicated by Subversion server first
+                # Act on existing instructions
+                perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
+                perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
+                perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
+                perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
+                # Actions indicated by Subversion server next
                 if root_revision_on_remote_svn_repo != last_root_revision:
                     all_entries = svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url, baseline_relative_path)
                     create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns)
-                    perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
-                    perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
-                # Local events seconds
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
-                perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
-                # TODO calc right ?
+                # Is this TODO calc right ?
                 if time.time() - last_missed_time > 60:
                     # This is 1) a fallback, in case the watchdog file watcher misses something
                     # And 2) a processor that's going to process additions to the local sync dir
@@ -791,6 +810,8 @@ def main(argv):
                     enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns)
                     enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                     last_missed_time = time.time()
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+
             sleep_a_little(args.sleep_secs)
 #            print_rows(files_table)
             iteration += 1

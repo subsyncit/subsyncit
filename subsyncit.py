@@ -246,7 +246,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     File = Query()
     rows = files_table.search(File.instruction == "GET")
     start = time.time()
-    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server")
+    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
     for row in rows:
         relative_file_name = row['relativeFileName']
         is_file = row['isFile'] == "1"
@@ -288,8 +288,8 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + str(len(rows))
-              + " files via GET (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
+              + " files total (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
 
             # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
 
@@ -449,7 +449,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
     rows = files_table.search(File.instruction == "PUT")
 
     start = time.time()
-    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server")
+    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
     put_count = 0
     not_actually_changed = 0
     for row in rows:

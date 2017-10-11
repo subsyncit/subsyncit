@@ -189,7 +189,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         output = put.content.decode('utf-8')
         local_file = calculate_sha1_from_local_file(
             absolute_local_root_path + relative_file_name)
-        debug(absolute_local_root_path + relative_file_name + ": PUT " + str(put.status_code) + ", sha1:" + local_file)
+        # debug(absolute_local_root_path + relative_file_name + ": PUT " + str(put.status_code) + ", sha1:" + local_file)
         if put.status_code == 201 or put.status_code == 204:
             return ""
         return output
@@ -235,6 +235,7 @@ def extract_name_type_rev(entry_xml_element):
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
     File = Query()
     rows = files_table.search(File.instruction == "GET")
+    start = time.time()
     for row in rows:
         relative_file_name = row['relativeFileName']
         is_file = row['isFile'] == "1"
@@ -254,11 +255,8 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 remote_subversion_repo_url, relative_file_name,
                 absolute_local_root_path)
 
-            get = requests_session.get(
-                remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), stream=True)
-            debug(
-                absolute_local_root_path + relative_file_name + ": GET " + str(
-                    get.status_code))
+            get = requests_session.get(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), stream=True)
+            # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
             # See https://github.com/requests/requests/issues/2155
             # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
 
@@ -277,7 +275,12 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
             update_row_shas(files_table, relative_file_name, sha1)
             update_row_revision(files_table, relative_file_name, repoRev)
         update_instruction_in_table(files_table, None, relative_file_name)
-        # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
+
+        if len(rows) > 0:
+            print("GETs from Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows))
+                  + " files via GET (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+
+            # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
 
 
 def sync_remote_deletes_to_local(files_table, absolute_local_root_path):
@@ -407,7 +410,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     duration = time.time() - start
     if duration > 0.1:
-        print("PROFIND (root/all) on Svn repo took " + str(round(duration, 1)) + " secs")
+        print("PROFIND (root/all) on Svn repo took " + str(round(duration, 2)) + " secs")
 
     return entries
 
@@ -431,7 +434,8 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
     start = time.time()
 
-    add_changes = 0
+    put_count = 0
+    not_actually_changed = 0
     for row in rows:
         rel_file_name = row['relativeFileName']
         abs_local_file_path = (absolute_local_root_path + rel_file_name)
@@ -445,23 +449,24 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
             # files that come down as new/changed, get written to the FS trigger a file added/changed message,
             # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
             # don't do it.
+            not_actually_changed += 1
         else:
             output = put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table)  # <h1>Created</h1>
 
             if "txn-current-lock': Permission denied" in output:
                 print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                # TODO
             elif not output == "":
                 print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
             if "... still being written to" not in output:
                 update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path)
             if output == "":
-                add_changes += 1
+                put_count += 1
         update_instruction_in_table(files_table, None, rel_file_name)
-    if add_changes > 0:
-        print(str(add_changes) + " add(s) or change(s) PUT to Subversion")
 
     if len(rows) > 0:
-        print("PUTs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
+        print("PUTs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(put_count)
+              + " PUT files, " + str(not_actually_changed) + " not actually changed (from " + str(len(rows)) + " possible), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
 def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path):
     url = remote_subversion_repo_url + esc(relative_file_name)
@@ -491,7 +496,7 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print("MKCOLs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
+        print("MKCOLs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + " MKCOLs/sec.")
 
 
 def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, remote_subversion_repo_url):
@@ -519,7 +524,8 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        print("DELETEs on Svn repo took " + str(round(time.time() - start, 1)) + " secs")
+        print("DELETEs on Svn repo took " + str(round(time.time() - start, 2)) + " secs, "
+              + str(int(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path):

@@ -5,7 +5,7 @@
 A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server), and does not have any other server-side install.
 It is written in Python, works on Windows, Mac and Linux, and does not depend on a Subversion install on the client.
 
-It has been tested with files of random bytes up to 12GB in size. It has also been tested with Subversion repo holding
+It has been tested with files up to 12GB in size (made of random bytes). It has also been tested with a Subversion repository holding
 3.4TB of history.
 
 Corporates would be attracted to this, if:

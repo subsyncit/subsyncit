@@ -217,7 +217,7 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
             else:
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
-            upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
+            upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, 0, 0, instruction="GET")
     File = Query()
     files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
 
@@ -246,7 +246,8 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     File = Query()
     rows = files_table.search(File.instruction == "GET")
     start = time.time()
-    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
+    if len(rows) > 3:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
     for row in rows:
         relative_file_name = row['relativeFileName']
         is_file = row['isFile'] == "1"
@@ -259,7 +260,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     "Location"].endswith("/")):
             if not os.path.exists(abs_local_file_path):
                 os.makedirs(abs_local_file_path)
-                update_row_shas(files_table, relative_file_name, None)
+                update_row_shas_size_and_timestamp(files_table, relative_file_name, None, 0, 0)
         else:
             (repoRev, sha1,
              baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session,
@@ -282,16 +283,15 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     if chunk:
                         f.write(chunk)
             sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-            # print("get cycle " + absolute_local_root_path + " - " + abs_local_file_path + " - " + sha1)
-            update_row_shas(files_table, relative_file_name, sha1)
+            size = os.path.getsize(abs_local_file_path)
+            timestamp = os.path.getmtime(abs_local_file_path)
+            update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size, timestamp)
             update_row_revision(files_table, relative_file_name, repoRev)
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
               + " files total (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
-
-            # print "end_of_sync" + prt_files_table_for(files_table, relative_file_name)
 
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
@@ -341,10 +341,9 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
 
 
-def update_row_shas(files_table, relative_file_name, sha1):
+def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size, timestamp):
     File = Query()
-    # print("updating " + relative_file_name + " to " + str(sha1) + " in " + sync_dir)
-    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1}, File.relativeFileName == relative_file_name)
+    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz': size, 'ts': timestamp}, File.relativeFileName == relative_file_name)
 
 def prt_files_table_for(files_table, relative_file_name):
     return str(files_table.search(Query().relativeFileName == relative_file_name))
@@ -355,7 +354,7 @@ def update_row_revision(files_table, relative_file_name, rev=-1):
     files_table.update({'repoRev': -999}, File.relativeFileName == relative_file_name)
 
 
-def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
+def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, size, ts, instruction):
 
     File = Query()
     # print "upsert1" + prt_files_table_for(files_table, relative_file_name)
@@ -364,12 +363,14 @@ def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instr
                    'isFile': ("1" if file_or_dir == "file" else "0"),
                    'remoteSha1': None,
                    'localSha1': None,
+                   'sz': size,
+                   'ts': ts,
+                   'instruction': instruction,
                    'repoRev': -999})
+        return
 
     if instruction is not None:
         update_instruction_in_table(files_table, instruction, relative_file_name)
-
-    # print "upsert2" + prt_files_table_for(files_table, relative_file_name)
 
 
 def update_instruction_in_table(files_table, instruction, relative_file_name):
@@ -449,7 +450,8 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
     rows = files_table.search(File.instruction == "PUT")
 
     start = time.time()
-    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+    if len(rows) > 3:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
     put_count = 0
     not_actually_changed = 0
     for row in rows:
@@ -475,7 +477,9 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
             elif not output == "":
                 print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
             if "... still being written to" not in output:
-                update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path)
+                size = os.path.getsize(abs_local_file_path)
+                timestamp = os.path.getmtime(abs_local_file_path)
+                update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size, timestamp)
             if output == "":
                 put_count += 1
         update_instruction_in_table(files_table, None, rel_file_name)
@@ -484,7 +488,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
         print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
               + " PUT files, " + str(not_actually_changed) + " not actually changed (from " + str(len(rows)) + " possible), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
-def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path):
+def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path, size, timestamp):
     url = remote_subversion_repo_url + esc(relative_file_name)
     elements_for = svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
     i = len(elements_for)
@@ -493,7 +497,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
     for relative_file_name2, rev, sha1 in elements_for:
         if local_sha1 != sha1:
             print(("SHA1s don't match when they should for " + relative_file_name2 + " " + str(sha1) + " " + local_sha1))
-        update_row_shas(files_table, relative_file_name2, local_sha1)
+        update_row_shas_size_and_timestamp(files_table, relative_file_name2, local_sha1, size, timestamp)
         update_row_revision(files_table, relative_file_name2, rev)
 
 
@@ -585,6 +589,7 @@ def write_error(absolute_local_root_path, msg):
 
 def sleep_a_little(sleep_secs):
     time.sleep(sleep_secs)
+    print("slept")
 
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
@@ -595,12 +600,12 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
     while len(local_adds_chgs_deletes_queue) > 0:
         (relative_file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
-            upsert_row_in_table(files_table, relative_file_name, "-1", "dir", instruction="MKCOL")
+            upsert_row_in_table(files_table, relative_file_name, "-1", "dir", 0, 0, instruction="MKCOL")
         elif action == "add_file":
             in_subversion = file_is_in_subversion(files_table, relative_file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
-                upsert_row_in_table(files_table, relative_file_name, "-1", "file", instruction="PUT")
+                upsert_row_in_table(files_table, relative_file_name, "-1", "file", 0, 0, instruction="PUT")
         elif action == "change":
             update_instruction_in_table(files_table, "PUT", relative_file_name)
         elif action == "delete":
@@ -638,16 +643,18 @@ def print_rows(files_table):
     files_table_all = sorted(files_table.all(), key=lambda k: k['relativeFileName'])
     if len(files_table_all) > 0:
         print("All Items, as per 'files' table:")
-        print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, instruction")
+        print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, size, timestamp, instruction")
         for row in files_table_all:
             print(("  " + row['relativeFileName'] + ", " + str(row['isFile']) + ", " + str(row['repoRev']) + ", " +
-                  str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['instruction'])))
+                  str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['sz']) + ", " + str(row['ts']) + ", " + str(row['instruction'])))
 
 
 def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
 
     start = time.time()
 
+    add_files = 0
+    changes = 0
     for (dir, _, files) in os.walk(absolute_local_root_path):
         for f in files:
             path = os.path.join(dir, f)
@@ -661,14 +668,17 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
                 continue
             if path_exists and not in_subversion:
                 local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
+                add_files += 1
             elif path_exists and in_subversion and instruction == None:
                 # This is speculative, logic further on will not PUT the file up
                 # if the SHA is unchanged.
                 local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
+                changes += 1
 
     duration = time.time() - start
-    if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Missed adds and changes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
+    if duration > 5 or changes > 0 or add_files > 0:
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(add_files) + " missed adds and " + str(changes)
+              + " missed changes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
 
 
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
@@ -826,7 +836,7 @@ def main(argv):
     except RuntimeError:
         pass
 
-    debug = False
+    debug = True
 
     if debug:
         print_rows(files_table)

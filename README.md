@@ -1,5 +1,7 @@
 # Subsyncit
 
+<p align="center"><img src="https://user-images.githubusercontent.com/82182/31454859-dbf012c8-ae84-11e7-8823-ff52c98d12b7.png"/></p>
+
 A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server), and does not have any other server-side install.
 It is written in Python, works on Windows, Mac and Linux, and does not depend on a Subversion install on the client.
 

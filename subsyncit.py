@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-11 20:57:20.831043 (UTC)
+# Version: 2017-10-11 21:00:36.445028 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -701,13 +701,17 @@ def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolut
 
     start = time.time()
 
+    missed_deletes = 0
+
     for row in files_table.all():
         if not os.path.exists(absolute_local_root_path + row['relativeFileName']):
+            missed_deletes += 1
             local_adds_chgs_deletes_queue.add((row['relativeFileName'], "delete"))
 
     duration = time.time() - start
-    if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Missed deletes (from analysis of all files in sync dir) took " + english_duration(duration) + ".")
+    if duration > 10 or missed_deletes > 0 :
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed deletes (from analysis of all files in local sync directory vs the table of files) took " + english_duration(
+            duration) + ".")
 
 
 def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):

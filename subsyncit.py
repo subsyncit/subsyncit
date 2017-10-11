@@ -246,6 +246,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     File = Query()
     rows = files_table.search(File.instruction == "GET")
     start = time.time()
+    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server")
     for row in rows:
         relative_file_name = row['relativeFileName']
         is_file = row['isFile'] == "1"
@@ -448,7 +449,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
     rows = files_table.search(File.instruction == "PUT")
 
     start = time.time()
-
+    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server")
     put_count = 0
     not_actually_changed = 0
     for row in rows:

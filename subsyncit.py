@@ -224,7 +224,7 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(delete_locally)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(delete_locally))
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
 
@@ -553,7 +553,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
-              + str(len(directories_deleted)) + " directories and " + str(files_deleted) + " files, "
+              + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
@@ -707,7 +707,7 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
-              + " missed changes (from analysis of all files in local sync directory) took " + english_duration(duration) + ".")
+              + " missed changes (added/changed while Subsynct was not running) took " + english_duration(duration) + ".")
 
 
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
@@ -717,13 +717,14 @@ def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolut
     missed_deletes = 0
 
     for row in files_table.all():
-        if not os.path.exists(absolute_local_root_path + row['relativeFileName']):
+        relative_file_name = row['relativeFileName']
+        if not os.path.exists(absolute_local_root_path + relative_file_name):
             missed_deletes += 1
             local_adds_chgs_deletes_queue.add((row['relativeFileName'], "delete"))
 
     duration = time.time() - start
     if duration > 10 or missed_deletes > 0 :
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed deletes (from analysis of all files in local sync directory vs the table of files) took " + english_duration(
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed DELETEs (deleted while Subsynct was not running) took " + english_duration(
             duration) + ".")
 
 

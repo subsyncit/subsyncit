@@ -44,7 +44,7 @@ class BaseSyncTest(unittest.TestCase):
         ix = 0
         while not os.path.exists(op2):
             ix += 1
-            if ix > 300:
+            if ix > 45:
                 self.fail("no sync'd file")
             time.sleep(1)
 
@@ -119,7 +119,7 @@ class BaseSyncTest(unittest.TestCase):
         ix = 0
         while os.path.exists(f):
             ix += 1
-            if ix > 45:
+            if ix > 75:
                 self.fail("file " + f + " didn't disappear in 45 secs")
             time.sleep(1)
 

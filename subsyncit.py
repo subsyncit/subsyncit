@@ -212,11 +212,13 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
+
+    delete_count = files_table.count(Query().instruction == 'QUESTION')
     delete_locally = files_table.update({'instruction': 'DELETE LOCALLY'}, Query().instruction == 'QUESTION')
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(delete_locally))
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(delete_count)
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
 
@@ -229,7 +231,10 @@ def english_duration(duration):
 
 
 def un_encode_path(relative_file_name):
-    return relative_file_name.replace("&amp;", "&").replace("&quot;", "\"")
+    return relative_file_name.replace("&amp;", "&")\
+        .replace("&quot;", "\"")\
+        .replace("%3F", "?")\
+        .replace("%26", "&")
 
 
 def extract_name_type_rev(entry_xml_element):
@@ -527,7 +532,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
               + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
@@ -679,7 +684,7 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
-              + " missed changes (added/changed while Subsynct was not running) took " + english_duration(duration) + ".")
+              + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
 
 def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
@@ -696,7 +701,7 @@ def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolut
 
     duration = time.time() - start
     if duration > 10 or missed_deletes > 0 :
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed DELETEs (deleted while Subsynct was not running) took " + english_duration(
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
             duration) + ".")
 
 

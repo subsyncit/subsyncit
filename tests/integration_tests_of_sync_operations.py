@@ -105,16 +105,22 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     def test_a_changed_file_syncs_back(self):
 
         p1, p2 = self.start_two_subsyncits("integrationTests/")
+
+        time.sleep(2)
+
         try:
             with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w", encoding="utf-8") as text_file:
                 text_file.write("Hello") # f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0
-            op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
 
+            op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
             self.wait_for_file_to_appear(op2)
+
             time.sleep(1)
             with open(op2, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello to you too") # 3f19e1ea9c19f0c6967723b453a423340cbd6e36
+
             self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "Hello to you too")
+
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
@@ -191,7 +197,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             files_not_found_in_subversion = copy.deepcopy(files)
 
-            while len(files) > 1 and elapsed < 90:
+            while len(files_not_found_in_subversion) > 1 and elapsed < 90:
                 files2 = copy.deepcopy(files_not_found_in_subversion)
                 for f in files2:
                     if requests.get(self.svn_repo + self.rel_dir_1 + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
@@ -206,12 +212,15 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                             verify=False).status_code == 200:
                 files_not_found_in_subversion.remove("c?c")
 
-            self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion))
+            self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion) + ", sync dir: " + IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
-            self.assertEquals(str(sorted(
-                os.listdir(IntegrationTestsOfSyncOperations.testSyncDir1))),
-                "['.subsyncit.db', 'CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']")
+            # As Subsyncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
+
+            self.wait_for_file_to_appear(IntegrationTestsOfSyncOperations.testSyncDir1 + "CONTROL")
+
+            should_be = "['.subsyncit.db', 'CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']"
+            is_in_fact = str(sorted(os.listdir(IntegrationTestsOfSyncOperations.testSyncDir1)))
+            self.assertEquals(is_in_fact, should_be)
 
 
         finally:
@@ -304,6 +313,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.wait_for_file_to_disappear(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt")
             print(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt has disappeared as expected")
         finally:
+
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
 
@@ -563,7 +573,8 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             time.sleep(5)
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
-            print("Aborted size: " + str(aborted_get_size))
+            print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the ntegration test suite")
+            print("Aborted file size: " + str(aborted_get_size) + " of intended size " + str(sz))
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 

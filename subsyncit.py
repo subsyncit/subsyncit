@@ -231,7 +231,10 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
 def english_duration(duration):
     if duration < 90:
         return str(round(duration, 2)) + " secs"
-    return str(round(duration/60, 2)) + " mins"
+    if duration < 5400:
+        return str(round(duration/60, 2)) + " mins"
+    return str(round(duration/3600, 2)) + " hours"
+
 
 def un_encode_path(relative_file_name):
     return relative_file_name.replace("&amp;", "&").replace("&quot;", "\"")
@@ -677,26 +680,29 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
         for f in files:
             abs_local_file_path = os.path.join(dir, f)
             relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
-            in_subversion = file_is_in_subversion(files_table, relative_file_name)
-            instruction = instruction_for_file(files_table, relative_file_name)
-            path_exists = os.path.exists(abs_local_file_path)
+            rows = files_table.search(Query().relativeFileName == relative_file_name)
+            in_subversion = len(rows) == 1 and rows[0]['remoteSha1'] != None
+            instruction = None if len(rows) == 0 else rows[0]['instruction']
+
             if relative_file_name.startswith(".") \
                     or ".clash_" in relative_file_name \
                     or should_be_excluded(relative_file_name, excluded_filename_patterns):
                 continue
-            if path_exists and not in_subversion:
+
+            if not in_subversion:
                 # print("xFile to add: " + relative_file_name + " is not in subversion")
                 local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
                 add_files += 1
-            elif path_exists and in_subversion and instruction == None:
+            else:
                 osstat = os.stat(abs_local_file_path)
                 size_ts = osstat.st_size + osstat.st_mtime
-                (stored_size_ts) = size_and_timestamp_for_file(files_table, relative_file_name)
+                stored_size_ts = size_and_timestamp_for_file(files_table, relative_file_name)
                 if size_ts != stored_size_ts:
-                    # This is speculative, logic further on will not PUT the file up
-                    # if the SHA is unchanged.
-                    local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
-                    changes += 1
+                    if instruction == None:
+                        # This is speculative, logic further on will not PUT the file up if the SHA
+                        # is unchanged, but file_size + time_stamp change is approximate but far quicker
+                        local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
+                        changes += 1
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:

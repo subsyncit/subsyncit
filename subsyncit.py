@@ -182,8 +182,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
         dir = dirname(relative_file_name)
 
-        File = Query()
-        search = files_table.search(File.relativeFileName == dir)
+        search = files_table.search(Query().relativeFileName == dir)
         if requests_session.head(remote_subversion_repo_url + dir.replace(os.sep, "/")).status_code == 404:
             make_remote_subversion_directory_for(requests_session, dir, remote_subversion_repo_url)
 
@@ -200,8 +199,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 def create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns):
     start = time.time()
     get_count = 0
-    File = Query()
-    files_table.update({'instruction': 'QUESTION'}, File.instruction == None)
+    files_table.update({'instruction': 'QUESTION'}, Query().instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
         relative_file_name = un_encode_path(relative_file_name)
         if relative_file_name.startswith(".") \
@@ -209,8 +207,7 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
                 or should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
         dir_or_file = "dir" if sha1 is None else "file"
-        File = Query()
-        rows = files_table.search(File.relativeFileName == relative_file_name)
+        rows = files_table.search(Query().relativeFileName == relative_file_name)
         if len(rows) > 0:
             if rows[0]['remoteSha1'] == sha1:
                 update_instruction_in_table(files_table, None, relative_file_name)
@@ -219,8 +216,7 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
-    File = Query()
-    delete_locally = files_table.update({'instruction': 'DELETE LOCALLY'}, File.instruction == 'QUESTION')
+    delete_locally = files_table.update({'instruction': 'DELETE LOCALLY'}, Query().instruction == 'QUESTION')
 
     duration = time.time() - start
     if duration > 1:
@@ -248,8 +244,7 @@ def extract_name_type_rev(entry_xml_element):
 
 
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
-    File = Query()
-    rows = files_table.search(File.instruction == "GET")
+    rows = files_table.search(Query().instruction == "GET")
     start = time.time()
     if len(rows) > 3:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
@@ -303,8 +298,7 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
     start = time.time()
 
-    File = Query()
-    rows = files_table.search(File.instruction == 'DELETE LOCALLY')
+    rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
 
     for row in rows:
         relative_file_name = row['relativeFileName']
@@ -312,14 +306,12 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
         # TODO confirm via history.
 
         if row['isFile'] == 0:
-            File = Query()
-            files_table.remove(File.relativeFileName == relative_file_name)
+            files_table.remove(Query().relativeFileName == relative_file_name)
 
             # TODO LIKE
 
         else:
-            File = Query()
-            files_table.remove(File.relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
+            files_table.remove(Query().relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
 
         name = (absolute_local_root_path + relative_file_name)
         try:
@@ -336,8 +328,7 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
             if len(listdir) == 0:
                 try:
                     shutil.rmtree(path_parent)
-                    File = Query()
-                    files_table.remove(File.relativeFileName == parent)
+                    files_table.remove(Query().relativeFileName == parent)
                 except OSError:
                     pass
 
@@ -347,30 +338,27 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
 
 def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts):
-    File = Query()
-    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, File.relativeFileName == relative_file_name)
+    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, Query().relativeFileName == relative_file_name)
 
 def prt_files_table_for(files_table, relative_file_name):
     return str(files_table.search(Query().relativeFileName == relative_file_name))
 
 
 def update_row_revision(files_table, relative_file_name, rev=-1):
-    File = Query()
-    files_table.update({'repoRev': -999}, File.relativeFileName == relative_file_name)
+    files_table.update({'repoRev': -999}, Query().relativeFileName == relative_file_name)
 
 
 def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
 
-    File = Query()
     # print "upsert1" + prt_files_table_for(files_table, relative_file_name)
-    if len(files_table.search(File.relativeFileName == relative_file_name)) == 0:
+    if len(files_table.search(Query().relativeFileName == relative_file_name)) == 0:
         files_table.insert({'relativeFileName': relative_file_name,
-                   'isFile': ("1" if file_or_dir == "file" else "0"),
-                   'remoteSha1': None,
-                   'localSha1': None,
-                   'sz_ts': 0,
-                   'instruction': instruction,
-                   'repoRev': -999})
+                            'isFile': ("1" if file_or_dir == "file" else "0"),
+                            'remoteSha1': None,
+                            'localSha1': None,
+                            'sz_ts': 0,
+                            'instruction': instruction,
+                            'repoRev': -999})
         return
 
     if instruction is not None:
@@ -380,15 +368,13 @@ def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instr
 def update_instruction_in_table(files_table, instruction, relative_file_name):
     if instruction is not None and instruction == "DELETE":
 
-        File = Query()
-        files_table.update({'instruction': instruction}, File.relativeFileName == relative_file_name)
+        files_table.update({'instruction': instruction}, Query().relativeFileName == relative_file_name)
 
         # TODO LIKE
 
     else:
 
-        File = Query()
-        files_table.update({'instruction': instruction}, File.relativeFileName == relative_file_name)
+        files_table.update({'instruction': instruction}, Query().relativeFileName == relative_file_name)
 
 
 def get_relative_file_name(full_path, absolute_local_root_path):
@@ -449,9 +435,7 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path):
-
-    File = Query()
-    rows = files_table.search(File.instruction == "PUT")
+    rows = files_table.search(Query().instruction == "PUT")
 
     start = time.time()
     if len(rows) > 3:
@@ -506,9 +490,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
-
-    File = Query()
-    rows = files_table.search(File.instruction == 'MKCOL')
+    rows = files_table.search(Query().instruction == 'MKCOL')
 
     start = time.time()
 
@@ -528,8 +510,7 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
 
     start = time.time()
 
-    File = Query()
-    rows = files_table.search(File.instruction == 'DELETE ON REMOTE')
+    rows = files_table.search(Query().instruction == 'DELETE ON REMOTE')
 
     files_deleted = 0
     directories_deleted = 0
@@ -539,13 +520,11 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
         output = requests_delete.content.decode('utf-8')
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
-            File = Query()
             files_deleted += 1
-            files_table.remove(File.relativeFileName == row['relativeFileName'])
+            files_table.remove(Query().relativeFileName == row['relativeFileName'])
         else:
-            File = Query()
             directories_deleted += 1
-            files_table.remove(File.relativeFileName == row['relativeFileName'])
+            files_table.remove(Query().relativeFileName == row['relativeFileName'])
             # TODO LIKE
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
@@ -631,8 +610,7 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
 
 
 def file_is_in_subversion(files_table, relative_file_name):
-    File = Query()
-    rows = files_table.search(File.relativeFileName == relative_file_name)
+    rows = files_table.search(Query().relativeFileName == relative_file_name)
 
     if len(rows) == 0:
         return False
@@ -641,8 +619,7 @@ def file_is_in_subversion(files_table, relative_file_name):
 
 
 def instruction_for_file(files_table, relative_file_name):
-    File = Query()
-    rows = files_table.search(File.relativeFileName == relative_file_name)
+    rows = files_table.search(Query().relativeFileName == relative_file_name)
 
     if len(rows) == 0:
         return None
@@ -651,8 +628,7 @@ def instruction_for_file(files_table, relative_file_name):
 
 
 def size_and_timestamp_for_file(files_table, relative_file_name):
-    File = Query()
-    rows = files_table.search(File.relativeFileName == relative_file_name)
+    rows = files_table.search(Query().relativeFileName == relative_file_name)
 
     if len(rows) == 0:
         return None

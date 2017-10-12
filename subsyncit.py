@@ -182,15 +182,11 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
         dir = dirname(relative_file_name)
 
-        search = files_table.search(Query().relativeFileName == dir)
         if requests_session.head(remote_subversion_repo_url + dir.replace(os.sep, "/")).status_code == 404:
             make_remote_subversion_directory_for(requests_session, dir, remote_subversion_repo_url)
 
         put = requests_session.put(url, data=f.read())
         output = put.content.decode('utf-8')
-        local_file = calculate_sha1_from_local_file(
-            absolute_local_root_path + relative_file_name)
-        # debug(absolute_local_root_path + relative_file_name + ": PUT " + str(put.status_code) + ", sha1:" + local_file)
         if put.status_code == 201 or put.status_code == 204:
             return ""
         return output

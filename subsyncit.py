@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-11 21:00:36.445028 (UTC)
+# Version: 2017-10-12 00:11:34.347209 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -285,14 +285,15 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     if chunk:
                         f.write(chunk)
             sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-            size_ts = os.path.getsize(abs_local_file_path) + os.path.getmtime(abs_local_file_path)
+            osstat = os.stat(abs_local_file_path)
+            size_ts = osstat.st_size + osstat.st_mtime
             update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
             update_row_revision(files_table, relative_file_name, repoRev)
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
-              + " files total (from " + str(len(rows)) + " possible), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+              + " files total (from " + str(len(rows)) + " total), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
 
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
@@ -477,7 +478,8 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
             elif not output == "":
                 print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
             if "... still being written to" not in output:
-                size_ts = os.path.getsize(abs_local_file_path) + os.path.getmtime(abs_local_file_path)
+                osstat = os.stat(abs_local_file_path)
+                size_ts = osstat.st_size + osstat.st_mtime
                 update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
             if output == "":
                 put_count += 1
@@ -485,7 +487,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
-              + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(len(rows)) + " possible), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
+              + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(len(rows)) + " total), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
 def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts):
     url = remote_subversion_repo_url + esc(relative_file_name)
@@ -526,17 +528,20 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
     File = Query()
     rows = files_table.search(File.instruction == 'DELETE ON REMOTE')
 
+    files_deleted = 0
+    directories_deleted = 0
     for row in rows:
-        # print "D ROW: " + str(row)
         rfn = row['relativeFileName']
         requests_delete = requests_session.delete(remote_subversion_repo_url + esc(rfn).replace(os.sep, "/"))
         output = requests_delete.content.decode('utf-8')
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
             File = Query()
+            files_deleted += 1
             files_table.remove(File.relativeFileName == row['relativeFileName'])
         else:
             File = Query()
+            directories_deleted += 1
             files_table.remove(File.relativeFileName == row['relativeFileName'])
             # TODO LIKE
 
@@ -545,7 +550,8 @@ def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, rem
 
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') +": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
-              + str(len(rows)) + " directories, " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
+              + str(len(directories_deleted)) + " directories and " + str(files_deleted) + " files, "
+              + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path):
@@ -683,7 +689,8 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
                 local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
                 add_files += 1
             elif path_exists and in_subversion and instruction == None:
-                size_ts = os.path.getsize(abs_local_file_path) + os.path.getmtime(abs_local_file_path)
+                osstat = os.stat(abs_local_file_path)
+                size_ts = osstat.st_size + osstat.st_mtime
                 (stored_size_ts) = size_and_timestamp_for_file(files_table, relative_file_name)
                 if size_ts != stored_size_ts:
                     # This is speculative, logic further on will not PUT the file up
@@ -856,7 +863,7 @@ def main(argv):
     except RuntimeError:
         pass
 
-    debug = True
+    debug = False
 
     if debug:
         print_rows(files_table)

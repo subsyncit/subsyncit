@@ -203,9 +203,9 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
                 or should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
         dir_or_file = "dir" if sha1 is None else "file"
-        rows = files_table.search(Query().relativeFileName == relative_file_name)
-        if len(rows) > 0:
-            if rows[0]['remoteSha1'] == sha1:
+        row = files_table.get(Query().relativeFileName == relative_file_name)
+        if row:
+            if row['remoteSha1'] == sha1:
                 update_instruction_in_table(files_table, None, relative_file_name)
             else:
                 get_count += 1
@@ -347,7 +347,7 @@ def update_row_revision(files_table, relative_file_name, rev=-1):
 def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
 
     # print "upsert1" + prt_files_table_for(files_table, relative_file_name)
-    if len(files_table.search(Query().relativeFileName == relative_file_name)) == 0:
+    if not files_table.contains(Query().relativeFileName == relative_file_name):
         files_table.insert({'relativeFileName': relative_file_name,
                             'isFile': ("1" if file_or_dir == "file" else "0"),
                             'remoteSha1': None,
@@ -606,30 +606,30 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
 
 
 def file_is_in_subversion(files_table, relative_file_name):
-    rows = files_table.search(Query().relativeFileName == relative_file_name)
+    row = files_table.get(Query().relativeFileName == relative_file_name)
 
-    if len(rows) == 0:
+    if not row:
         return False
     else:
-        return rows[0]['remoteSha1'] != None
+        return row['remoteSha1'] != None
 
 
 def instruction_for_file(files_table, relative_file_name):
-    rows = files_table.search(Query().relativeFileName == relative_file_name)
+    row = files_table.get(Query().relativeFileName == relative_file_name)
 
-    if len(rows) == 0:
+    if not row:
         return None
     else:
-        return rows[0]['instruction']
+        return row['instruction']
 
 
 def size_and_timestamp_for_file(files_table, relative_file_name):
-    rows = files_table.search(Query().relativeFileName == relative_file_name)
+    row = files_table.get(Query().relativeFileName == relative_file_name)
 
-    if len(rows) == 0:
+    if not row:
         return None
     else:
-        return (rows[0]['sz_ts'])
+        return row['sz_ts']
 
 
 def print_rows(files_table):
@@ -652,9 +652,9 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
         for f in files:
             abs_local_file_path = os.path.join(dir, f)
             relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
-            rows = files_table.search(Query().relativeFileName == relative_file_name)
-            in_subversion = len(rows) == 1 and rows[0]['remoteSha1'] != None
-            instruction = None if len(rows) == 0 else rows[0]['instruction']
+            row = files_table.get(Query().relativeFileName == relative_file_name)
+            in_subversion = row and row['remoteSha1'] != None
+            instruction = None if not row else row['instruction']
 
             if relative_file_name.startswith(".") \
                     or ".clash_" in relative_file_name \

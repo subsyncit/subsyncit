@@ -506,7 +506,6 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
 
     for row in rows:
         relative_file_name = row['relativeFileName']
-        print("update_revisions_for_created_directories= " + relative_file_name)
         (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path)
         update_row_revision(files_table, relative_file_name, rev=revn)
         update_instruction_in_table(files_table, None, relative_file_name)
@@ -677,8 +676,10 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
 
             if not in_subversion:
                 # print("xFile to add: " + relative_file_name + " is not in subversion")
-                local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
-                add_files += 1
+                add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
+                if not add_queued:
+                    local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
+                    add_files += 1
             else:
                 osstat = os.stat(abs_local_file_path)
                 size_ts = osstat.st_size + osstat.st_mtime
@@ -687,8 +688,11 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
                     if instruction == None:
                         # This is speculative, logic further on will not PUT the file up if the SHA
                         # is unchanged, but file_size + time_stamp change is approximate but far quicker
-                        local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
-                        changes += 1
+                        add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
+                        chg_queued = (relative_file_name, "change") in local_adds_chgs_deletes_queue
+                        if not add_queued and not chg_queued:
+                            local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
+                            changes += 1
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:

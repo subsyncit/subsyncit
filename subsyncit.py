@@ -45,6 +45,7 @@ import sys
 import time
 from os.path import dirname, splitext
 from time import strftime
+from threading import Thread
 
 import requests
 import requests.packages.urllib3
@@ -696,7 +697,7 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
               + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
 

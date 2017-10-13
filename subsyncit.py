@@ -192,7 +192,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         return output
 
 
-def create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns):
+def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server):
 
     start = time.time()
     unprocessed_files = []
@@ -204,7 +204,7 @@ def create_GETs_and_local_deletes_instructions(files_table, all_entries, exclude
             unprocessed_files.append(relative_file_name)
 
     get_count = 0
-    for relative_file_name, rev, sha1 in all_entries:
+    for relative_file_name, rev, sha1 in files_on_svn_server:
         if should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
         if relative_file_name in unprocessed_files:
@@ -516,7 +516,7 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
                                                                                                                                                                                      start), 2)) + " MKCOLs/sec.")
 
 
-def perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, remote_subversion_repo_url):
+def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):
 
     start = time.time()
 
@@ -823,15 +823,15 @@ def main(argv):
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
-                # Act on existing instructions
+                # Act on existing instructions (if any)
                 perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                 perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                 perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
-                perform_DELETEs_on_remote_subversion_repo(requests_session, files_table, args.remote_subversion_repo_url)
-                # Actions indicated by Subversion server next
+                perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, args.remote_subversion_repo_url)
+                # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != last_root_revision:
-                    all_entries = svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url, baseline_relative_path)
-                    create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns)
+                    create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
+                                 svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url,baseline_relative_path))
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
                 # Is this TODO calc right ?

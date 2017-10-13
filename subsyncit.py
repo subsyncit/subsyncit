@@ -193,32 +193,41 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
 
 def create_GETs_and_local_deletes_instructions(files_table, all_entries, excluded_filename_patterns):
+
     start = time.time()
+    unprocessed_files = []
+
+    matches = files_table.search((Query().instruction == None))
+    for match in matches:
+        relative_file_name = match['relativeFileName']
+        if not should_be_excluded(relative_file_name, excluded_filename_patterns):
+            unprocessed_files.append(relative_file_name)
+
     get_count = 0
-    files_table.update({'instruction': 'QUESTION'}, Query().instruction == None)
     for relative_file_name, rev, sha1 in all_entries:
-        relative_file_name = un_encode_path(relative_file_name)
-        if relative_file_name.startswith(".") \
-                or len(relative_file_name) == 0 \
-                or should_be_excluded(relative_file_name, excluded_filename_patterns):
+        if should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
-        dir_or_file = "dir" if sha1 is None else "file"
+        if relative_file_name in unprocessed_files:
+                unprocessed_files.remove(relative_file_name)
         row = files_table.get(Query().relativeFileName == relative_file_name)
         if row:
-            if row['remoteSha1'] == sha1:
-                update_instruction_in_table(files_table, None, relative_file_name)
-            else:
+            if not row['remoteSha1'] == sha1:
                 get_count += 1
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
+            get_count += 1
+            dir_or_file = "dir" if sha1 is None else "file"
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
 
-    delete_count = files_table.count(Query().instruction == 'QUESTION')
-    delete_locally = files_table.update({'instruction': 'DELETE LOCALLY'}, Query().instruction == 'QUESTION')
+    # files still in the unprocessed_files list are not up on Subversion
+    for relative_file_name in unprocessed_files:
+        row = files_table.get(Query().relativeFileName == relative_file_name)
+        if row:
+            update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(delete_count)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
 

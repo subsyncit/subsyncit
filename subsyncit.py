@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-12 00:11:34.347209 (UTC)
+# Version: 2017-10-14 20:02:37.169837 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -126,8 +126,9 @@ class NotPUTtingAsItWasChangedOnTheServerByAnotherUser(Exception):
 
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
-    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher):
+    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher, is_shutting_down):
         super(FileSystemNotificationHandler, self).__init__(ignore_patterns=["*/.*"])
+        self.is_shutting_down = is_shutting_down
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
         self.absolute_local_root_path = absolute_local_root_path
         self.file_system_watcher = file_system_watcher
@@ -137,6 +138,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if relative_file_name == ".subsyncit.stop":
             self.file_system_watcher.stop()
+            self.is_shutting_down.append(True)
             try:
                 self.file_system_watcher.join()
                 os.remove(event.src_path)
@@ -697,14 +699,18 @@ def print_rows(files_table):
                   str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['sz_ts']) + ", " + str(row['instruction'])))
 
 
-def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
+def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
 
     start = time.time()
 
     add_files = 0
     changes = 0
     for (dir, _, files) in os.walk(absolute_local_root_path):
+        if True in is_shutting_down:
+            break
         for f in files:
+            if True in is_shutting_down:
+                break
             abs_local_file_path = os.path.join(dir, f)
             relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
             row = files_table.get(Query().relativeFileName == relative_file_name)
@@ -742,13 +748,15 @@ def enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue
               + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
 
-def enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
+def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
 
     start = time.time()
 
     missed_deletes = 0
 
     for row in files_table.all():
+        if True in is_shutting_down:
+            break
         relative_file_name = row['relativeFileName']
         if not os.path.exists(absolute_local_root_path + relative_file_name):
             missed_deletes += 1
@@ -786,6 +794,20 @@ def get_excluded_filename_patterns(requests_session, remote_subversion_repo_url)
         return []
     except requests.exceptions.ConnectionError as e:
         return []
+
+def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down):
+    last_missed_time = time.time() - 60
+    while True not in is_shutting_down:
+        if time.time() - last_missed_time > 90:
+            # This is 1) a fallback, in case the watchdog file watcher misses something
+            # And 2) a processor that's going to process additions to the local sync dir
+            # that may have happened when this daemon wasn't running.
+
+            enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns)
+            enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
+            last_missed_time = time.time()
+        time.sleep(5)
+
 
 
 def make_requests_session(auth, verifySetting):
@@ -854,15 +876,15 @@ def main(argv):
     make_hidden_on_windows_too(tinydb_path)
 
     last_root_revision = -1
+    is_shutting_down = []
 
     file_system_watcher = Observer()
-    notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path,
-                                            file_system_watcher)
+    notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down)
     file_system_watcher.schedule(notification_handler, args.absolute_local_root_path, recursive=True)
     file_system_watcher.start()
 
     iteration = 0
-    last_missed_time = 0
+    fallback_thread = None
 
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
@@ -876,6 +898,11 @@ def main(argv):
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
+                if not fallback_thread:
+                    fallback_thread = Thread(target=enque_missed_things,
+                                             args=(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down))
+                    fallback_thread.start()
+
                 # Act on existing instructions (if any)
                 perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                 perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
@@ -887,14 +914,6 @@ def main(argv):
                                  svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url,baseline_relative_path))
                     update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
-                # Is this TODO calc right ?
-                if time.time() - last_missed_time > 60:
-                    # This is 1) a fallback, in case the watchdog file watcher misses something
-                    # And 2) a processor that's going to process additions to the local sync dir
-                    # that may have happened when this daemon wasn't running.
-                    enque_any_missed_adds_and_changes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns)
-                    enque_any_missed_deletes(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                    last_missed_time = time.time()
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
 
             sleep_a_little(args.sleep_secs)
@@ -904,6 +923,7 @@ def main(argv):
         print("CTRL-C, Shutting down...")
         pass
     file_system_watcher.stop()
+    is_shutting_down.append(True)
     try:
         file_system_watcher.join()
     except RuntimeError:

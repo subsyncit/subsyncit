@@ -152,11 +152,14 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             with open(dir + "control", "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
 
-            time.sleep(10)
+            start = time.time()
 
-            rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
+            rc = 404
+            while rc != 200 and time.time() - start < 60:
+                rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
+                time.sleep(5)
+
             self.assertEqual(rc, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
-
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + "two/.foo", auth=(self.user, self.passwd), verify=False).status_code, 200)

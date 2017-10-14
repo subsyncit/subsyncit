@@ -621,29 +621,17 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
 
 def file_is_in_subversion(files_table, relative_file_name):
     row = files_table.get(Query().relativeFileName == relative_file_name)
-
-    if not row:
-        return False
-    else:
-        return row['remoteSha1'] != None
+    return False if not row else row['remoteSha1'] != None
 
 
 def instruction_for_file(files_table, relative_file_name):
     row = files_table.get(Query().relativeFileName == relative_file_name)
-
-    if not row:
-        return None
-    else:
-        return row['instruction']
+    return None if not row else row['instruction']
 
 
 def size_and_timestamp_for_file(files_table, relative_file_name):
     row = files_table.get(Query().relativeFileName == relative_file_name)
-
-    if not row:
-        return None
-    else:
-        return row['sz_ts']
+    return None if not row else row['sz_ts']
 
 
 def print_rows(files_table):

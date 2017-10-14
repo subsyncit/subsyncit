@@ -45,7 +45,7 @@ import sys
 import time
 from os.path import dirname, splitext
 from time import strftime
-from threading import Thread
+from threading import Thread, Lock
 
 import requests
 import requests.packages.urllib3
@@ -83,6 +83,40 @@ def calculate_sha1_from_local_file(file):
 
     hexdigest = hasher.hexdigest()
     return hexdigest
+
+class MyTinyDBLock():
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+        self.lock = Lock()
+
+    def search(self, arg0):
+        with self.lock:
+            return self.delegate.search(arg0)
+
+    def get(self, arg0):
+        with self.lock:
+            return self.delegate.get(arg0)
+
+    def remove(self, arg0):
+        with self.lock:
+            return self.delegate.remove(arg0)
+
+    def update(self, arg0, arg1):
+        with self.lock:
+            return self.delegate.update(arg0, arg1)
+
+    def insert(self, arg0):
+        with self.lock:
+            return self.delegate.insert(arg0)
+
+    def contains(self, arg0):
+        with self.lock:
+            return self.delegate.contains(arg0)
+
+    def all(self):
+        with self.lock:
+            return self.delegate.all()
 
 
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
@@ -782,7 +816,7 @@ def main(argv):
 
     tinydb_path = args.absolute_local_root_path + ".subsyncit.db"
     db = TinyDB(tinydb_path)
-    files_table  = db.table('files')
+    files_table  = MyTinyDBLock(db.table('files'))
 
     local_adds_chgs_deletes_queue = IndexedSet()
 

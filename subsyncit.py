@@ -768,6 +768,18 @@ def get_excluded_filename_patterns(requests_session, remote_subversion_repo_url)
     except requests.exceptions.ConnectionError as e:
         return []
 
+
+def make_requests_session(auth, verifySetting):
+    # New session per major loop
+    requests_session = requests.Session()
+    requests_session.auth = auth
+    requests_session.verify = verifySetting
+    http_adapter = HTTPAdapter(pool_connections=1, max_retries=0)
+    requests_session.mount('http://', http_adapter)
+    requests_session.mount('https://', http_adapter)
+    return requests_session
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description='Subsyncit client')
 
@@ -836,13 +848,7 @@ def main(argv):
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
 
-            # New session per major loop
-            requests_session = requests.Session()
-            requests_session.auth = auth
-            requests_session.verify = verifySetting
-            http_adapter = HTTPAdapter(pool_connections=1, max_retries=0)
-            requests_session.mount('http://', http_adapter)
-            requests_session.mount('https://', http_adapter)
+            requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_repo_url, "", args.absolute_local_root_path) # root
             if root_revision_on_remote_svn_repo != -1:

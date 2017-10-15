@@ -247,7 +247,7 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     start = time.time()
     unprocessed_files = []
 
-    matches = files_table.search((Query().instruction == None))
+    matches = files_table.search(Query().instruction == None)
     for match in matches:
         relative_file_name = match['relativeFileName']
         if not should_be_excluded(relative_file_name, excluded_filename_patterns):
@@ -737,7 +737,7 @@ def print_rows(files_table):
 
 def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_adds_and_changes - start")
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - start")
 
     start = time.time()
 
@@ -782,34 +782,35 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
               + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_adds_and_changes - end")
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - end")
 
 def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_deletes - start")
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - start")
 
 
     start = time.time()
 
     missed_deletes = 0
 
-    for row in files_table.all():
+    for row in files_table.search(Query().instruction == None):
         if True in is_shutting_down:
             break
         relative_file_name = row['relativeFileName']
         if not os.path.exists(absolute_local_root_path + relative_file_name):
             missed_deletes += 1
+            print("missed delete " + relative_file_name + " " + str(row))
             local_adds_chgs_deletes_queue.add((row['relativeFileName'], "delete"))
 
     duration = time.time() - start
     if duration > 10 or missed_deletes > 0 :
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
+        print(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
             duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_deletes - end")
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - end")
 
 
 
@@ -852,7 +853,7 @@ def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, fi
             enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
             last_missed_time = time.time()
         time.sleep(5)
-    print("END OF FALLBACK THREAD")
+    print("END OF FALLBACK THREAD for " + absolute_local_root_path)
 
 
 

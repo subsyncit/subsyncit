@@ -868,6 +868,12 @@ def make_requests_session(auth, verifySetting):
 
 
 def main(argv):
+
+    if os.name != 'nt':
+        home_dir = os.path.expanduser('~' + (os.getenv("SUDO_USER") or os.getenv("USER")))
+    else:
+        home_dir = os.path.expanduser(str(os.getenv('USERPROFILE')))
+
     parser = argparse.ArgumentParser(description='Subsyncit client')
 
     parser.add_argument("remote_subversion_repo_url")
@@ -913,13 +919,23 @@ def main(argv):
         requests.packages.urllib3.disable_warnings()
         verifySetting = args.verify_ssl_cert
 
-    tinydb_path = args.absolute_local_root_path + ".subsyncit.db"
-    db = TinyDB(tinydb_path)
+    subsyncit_settings_dir = home_dir + os.sep + ".subsyncit"
+    if not os.path.exists(subsyncit_settings_dir):
+        os.mkdir(subsyncit_settings_dir)
+    make_hidden_on_windows_too(subsyncit_settings_dir)
+
+    db_dir = subsyncit_settings_dir + os.sep + args.absolute_local_root_path.replace("/","%47").replace(":","%58").replace("\\","%92")
+
+    if not os.path.exists(db_dir):
+        os.mkdir(db_dir)
+
+    db = TinyDB(db_dir + os.sep + "subsyncit.db")
     files_table  = MyTinyDBLock(db.table('files'))
 
-    local_adds_chgs_deletes_queue = IndexedSet()
+    with open(db_dir + os.sep + "INFO.TXT", "w") as text_file:
+        text_file.write(args.absolute_local_root_path + "is the Subsyncit path that this pertains to")
 
-    make_hidden_on_windows_too(tinydb_path)
+    local_adds_chgs_deletes_queue = IndexedSet()
 
     last_root_revision = -1
     is_shutting_down = []

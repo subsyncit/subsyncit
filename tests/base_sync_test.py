@@ -13,7 +13,7 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import hashlib
 import os
 import shutil
 import time
@@ -35,7 +35,24 @@ class BaseSyncTest(unittest.TestCase):
             shutil.rmtree(dirname)
         os.makedirs(dirname)
 
+        if os.name != 'nt':
+            home_dir = os.path.expanduser('~' + (os.getenv("SUDO_USER") or os.getenv("USER")))
+        else:
+            home_dir = os.path.expanduser(str(os.getenv('USERPROFILE')))
+
+        if not dirname.endswith(os.sep):
+            dirname += os.sep
+
+        subsyncit_dir = home_dir + os.sep + ".subsyncit"
+        db_dir = subsyncit_dir + os.sep + dirname.replace("/","%47").replace(":","%58").replace("\\","%92")
+        print("path of subsyncit settings=" + db_dir + " pertaining to " + dirname)
+        if os.path.exists(db_dir):
+             shutil.rmtree(db_dir)
+
     def signal_stop_of_subsyncIt(self, dir_):
+        if not os.path.exists(dir_):
+            os.makedirs(dir_)
+
         stop_ = dir_ + ".subsyncit.stop"
         with open(stop_, "w") as text_file:
             text_file.write("anything")

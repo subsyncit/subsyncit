@@ -221,7 +221,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             self.wait_for_file_to_appear(IntegrationTestsOfSyncOperations.testSyncDir1 + "CONTROL")
 
-            should_be = "['.subsyncit.db', 'CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']"
+            should_be = "['CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']"
             is_in_fact = str(sorted(os.listdir(IntegrationTestsOfSyncOperations.testSyncDir1)))
             self.assertEquals(is_in_fact, should_be)
 

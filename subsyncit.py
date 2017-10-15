@@ -319,6 +319,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - start")
     start = time.time()
     num_rows = 0
+    count = 0
 
     try:
         rows = files_table.search(Query().instruction == "GET")
@@ -358,6 +359,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     for chunk in get.iter_content(chunk_size=500000000):
                         if chunk:
                             f.write(chunk)
+                count += 1
                 sha1 = calculate_sha1_from_local_file(abs_local_file_path)
                 osstat = os.stat(abs_local_file_path)
                 size_ts = osstat.st_size + osstat.st_mtime
@@ -367,8 +369,8 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     finally:
 
         if num_rows > 0:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
-                  + " files total (from " + str(len(rows)) + " total), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(count)
+                  + " files total (from " + str(num_rows) + " total), at " + str(round(count / (time.time() - start) , 2)) + "/sec.")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - end")
 
@@ -571,7 +573,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
         if num_rows > 0:
             my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
-                  + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
+                  + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), at " + str(round(put_count / (time.time() - start), 2)) + "/sec")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
 
@@ -605,8 +607,8 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
-                                                                                                                                                                                     start), 2)) + " MKCOLs/sec.")
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
+                 + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + "/sec.")
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
 
 def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):

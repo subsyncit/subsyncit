@@ -53,7 +53,7 @@ from boltons.setutils import IndexedSet
 from requests.adapters import HTTPAdapter
 from tinydb import Query, TinyDB
 from watchdog.events import PatternMatchingEventHandler
-from watchdog.observers import Observer
+
 
 PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
              '<D:propfind xmlns:D="DAV:">\n' \
@@ -72,8 +72,8 @@ def debug(message):
 
 
 def my_trace(message):
-    #pass
-    print(message)
+    pass
+    #print(message)
 
 
 def calculate_sha1_from_local_file(file):
@@ -954,7 +954,17 @@ def main(argv):
     last_root_revision = -1
     is_shutting_down = []
 
-    file_system_watcher = Observer()
+    file_system_watcher = None
+    if sys.platform == "linux" or sys.platform == "linux2":
+        from watchdog.observers.inotify import InotifyObserver
+        file_system_watcher = InotifyObserver()
+    elif sys.platform == "darwin":
+        from watchdog.observers.fsevents2 import FSEventsObserver2
+        file_system_watcher = FSEventsObserver2()
+    elif sys.platform == "win32":
+        from watchdog.observers.read_directory_changes import WindowsApiObserver
+        file_system_watcher = WindowsApiObserver
+
     notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down)
     file_system_watcher.schedule(notification_handler, args.absolute_local_root_path, recursive=True)
     file_system_watcher.start()

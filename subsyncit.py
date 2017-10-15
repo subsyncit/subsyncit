@@ -735,6 +735,13 @@ def print_rows(files_table):
                   str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['sz_ts']) + ", " + str(row['instruction'])))
 
 
+def scantree(path):
+    for entry in os.scandir(path):
+        if entry.is_dir(follow_symlinks=False):
+            yield from scantree(entry.path)
+        else:
+            yield entry
+
 def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
 
     print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - start")
@@ -743,42 +750,37 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     add_files = 0
     changes = 0
-    for (dir, _, files) in os.walk(absolute_local_root_path):
+    for entry in scantree(absolute_local_root_path):
         if True in is_shutting_down:
             break
-        for f in files:
-            if True in is_shutting_down:
-                break
-            abs_local_file_path = os.path.join(dir, f)
-            relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
-            row = files_table.get(Query().relativeFileName == relative_file_name)
-            in_subversion = row and row['remoteSha1'] != None
-            instruction = None if not row else row['instruction']
+        abs_local_file_path = entry.path
+        relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
+        row = files_table.get(Query().relativeFileName == relative_file_name)
+        in_subversion = row and row['remoteSha1'] != None
+        if row and row['instruction'] != None:
+            continue
 
-            if relative_file_name.startswith(".") \
-                    or ".clash_" in relative_file_name \
-                    or should_be_excluded(relative_file_name, excluded_filename_patterns):
-                continue
+        if relative_file_name.startswith(".") \
+                or ".clash_" in relative_file_name \
+                or should_be_excluded(relative_file_name, excluded_filename_patterns):
+            continue
 
-            if not in_subversion:
-                # print("xFile to add: " + relative_file_name + " is not in subversion")
+        if not in_subversion:
+            # print("xFile to add: " + relative_file_name + " is not in subversion")
+            add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
+            if not add_queued:
+                local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
+                add_files += 1
+        else:
+            size_ts = entry.stat().st_size + entry.stat().st_mtime
+            if size_ts != row["sz_ts"]:
+                # This is speculative, logic further on will not PUT the file up if the SHA
+                # is unchanged, but file_size + time_stamp change is approximate but far quicker
                 add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
-                if not add_queued:
-                    local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
-                    add_files += 1
-            else:
-                osstat = os.stat(abs_local_file_path)
-                size_ts = osstat.st_size + osstat.st_mtime
-                stored_size_ts = size_and_timestamp_for_file(files_table, relative_file_name)
-                if size_ts != stored_size_ts:
-                    if instruction == None:
-                        # This is speculative, logic further on will not PUT the file up if the SHA
-                        # is unchanged, but file_size + time_stamp change is approximate but far quicker
-                        add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
-                        chg_queued = (relative_file_name, "change") in local_adds_chgs_deletes_queue
-                        if not add_queued and not chg_queued:
-                            local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
-                            changes += 1
+                chg_queued = (relative_file_name, "change") in local_adds_chgs_deletes_queue
+                if not add_queued and not chg_queued:
+                    local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
+                    changes += 1
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:

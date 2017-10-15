@@ -849,9 +849,9 @@ def get_excluded_filename_patterns(requests_session, remote_subversion_repo_url)
         return []
 
 def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down):
-    last_missed_time = time.time() - 60
+    last_missed_time = time.time() - 9970
     while True not in is_shutting_down:
-        if time.time() - last_missed_time > 90:
+        if time.time() - last_missed_time > 10000:
             # This is 1) a fallback, in case the watchdog file watcher misses something
             # And 2) a processor that's going to process additions to the local sync dir
             # that may have happened when this daemon wasn't running.

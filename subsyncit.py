@@ -241,6 +241,9 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
 def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server):
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
+
+
     start = time.time()
     unprocessed_files = []
 
@@ -277,6 +280,8 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
+
 
 def english_duration(duration):
     if duration < 90:
@@ -301,97 +306,110 @@ def extract_name_type_rev(entry_xml_element):
 
 
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
-    rows = files_table.search(Query().instruction == "GET")
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - start")
     start = time.time()
-    if len(rows) > 3:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
-    for row in rows:
-        relative_file_name = row['relativeFileName']
-        is_file = row['isFile'] == "1"
-        old_sha1_should_be = row['localSha1']
-        # print "get cycle old sha " + absolute_local_root_path + " " + str(old_sha1_should_be)
-        abs_local_file_path = (absolute_local_root_path + relative_file_name)
-        head = requests_session.head(remote_subversion_repo_url + esc(relative_file_name))
+    num_rows = 0
 
-        if not is_file or ("Location" in head.headers and head.headers[
-                    "Location"].endswith("/")):
-            if not os.path.exists(abs_local_file_path):
-                os.makedirs(abs_local_file_path)
-                update_row_shas_size_and_timestamp(files_table, relative_file_name, None, 0)
-        else:
-            (repoRev, sha1,
-             baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session,
-                remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there=True)
+    try:
+        rows = files_table.search(Query().instruction == "GET")
+        num_rows = len(rows)
+        if len(rows) > 3:
+            print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
+        for row in rows:
+            relative_file_name = row['relativeFileName']
+            is_file = row['isFile'] == "1"
+            old_sha1_should_be = row['localSha1']
+            # print "get cycle old sha " + absolute_local_root_path + " " + str(old_sha1_should_be)
+            abs_local_file_path = (absolute_local_root_path + relative_file_name)
+            head = requests_session.head(remote_subversion_repo_url + esc(relative_file_name))
 
-            get = requests_session.get(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), stream=True)
-            # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
-            # See https://github.com/requests/requests/issues/2155
-            # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
+            if not is_file or ("Location" in head.headers and head.headers[
+                "Location"].endswith("/")):
+                if not os.path.exists(abs_local_file_path):
+                    os.makedirs(abs_local_file_path)
+                    update_row_shas_size_and_timestamp(files_table, relative_file_name, None, 0)
+            else:
+                (repoRev, sha1,
+                 baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session,
+                                                                                            remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there=True)
 
-            if os.path.exists(abs_local_file_path):
-                local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                if local_sha1 != old_sha1_should_be:
-                    os.rename(abs_local_file_path,
-                              abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
-                                  '%Y-%m-%d-%H-%M-%S'))
-            with open(abs_local_file_path, 'wb') as f:
-                for chunk in get.iter_content(chunk_size=500000000):
-                    if chunk:
-                        f.write(chunk)
-            sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-            osstat = os.stat(abs_local_file_path)
-            size_ts = osstat.st_size + osstat.st_mtime
-            update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
-            update_row_revision(files_table, relative_file_name, repoRev)
-        update_instruction_in_table(files_table, None, relative_file_name)
+                get = requests_session.get(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), stream=True)
+                # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
+                # See https://github.com/requests/requests/issues/2155
+                # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
 
-    if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
-              + " files total (from " + str(len(rows)) + " total), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+                if os.path.exists(abs_local_file_path):
+                    local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+                    if local_sha1 != old_sha1_should_be:
+                        os.rename(abs_local_file_path,
+                                  abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
+                                      '%Y-%m-%d-%H-%M-%S'))
+                with open(abs_local_file_path, 'wb') as f:
+                    for chunk in get.iter_content(chunk_size=500000000):
+                        if chunk:
+                            f.write(chunk)
+                sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+                osstat = os.stat(abs_local_file_path)
+                size_ts = osstat.st_size + osstat.st_mtime
+                update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
+                update_row_revision(files_table, relative_file_name, repoRev)
+            update_instruction_in_table(files_table, None, relative_file_name)
+    finally:
 
+        if num_rows > 0:
+            print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
+                  + " files total (from " + str(len(rows)) + " total), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - end")
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - start")
+
     start = time.time()
 
-    rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
+    try:
+        rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
 
-    for row in rows:
-        relative_file_name = row['relativeFileName']
+        for row in rows:
+            relative_file_name = row['relativeFileName']
 
-        # TODO confirm via history.
+            # TODO confirm via history.
 
-        if row['isFile'] == 0:
-            files_table.remove(Query().relativeFileName == relative_file_name)
+            if row['isFile'] == 0:
+                files_table.remove(Query().relativeFileName == relative_file_name)
 
-            # TODO LIKE
+                # TODO LIKE
 
-        else:
-            files_table.remove(Query().relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
+            else:
+                files_table.remove(Query().relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
 
-        name = (absolute_local_root_path + relative_file_name)
-        try:
-            os.remove(name)
-        except OSError:
+            name = (absolute_local_root_path + relative_file_name)
             try:
-                shutil.rmtree(name)
+                os.remove(name)
             except OSError:
-                pass
-        parent = os.path.dirname(relative_file_name)
-        path_parent = absolute_local_root_path + parent
-        if os.path.exists(path_parent):
-            listdir = os.listdir(path_parent)
-            if len(listdir) == 0:
                 try:
-                    shutil.rmtree(path_parent)
-                    files_table.remove(Query().relativeFileName == parent)
+                    shutil.rmtree(name)
                 except OSError:
                     pass
+            parent = os.path.dirname(relative_file_name)
+            path_parent = absolute_local_root_path + parent
+            if os.path.exists(path_parent):
+                listdir = os.listdir(path_parent)
+                if len(listdir) == 0:
+                    try:
+                        shutil.rmtree(path_parent)
+                        files_table.remove(Query().relativeFileName == parent)
+                    except OSError:
+                        pass
+    finally:
 
-    duration = time.time() - start
-    if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
+        duration = time.time() - start
+        if duration > 1:
+            print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - end")
 
 def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts):
     foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, Query().relativeFileName == relative_file_name)
@@ -472,7 +490,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
             path = ""; rev = -1; sha1 = None
 
     duration = time.time() - start
-    if duration > 0.1:
+    if duration > 1:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
 
     return entries
@@ -492,53 +510,61 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 
 
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path):
-    rows = files_table.search(Query().instruction == "PUT")
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
     start = time.time()
-    if len(rows) > 3:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+    num_rows = 0
     put_count = 0
     not_actually_changed = 0
     possible_clash_encountered = False
-    for row in rows:
-        rel_file_name = row['relativeFileName']
-        try:
-            abs_local_file_path = (absolute_local_root_path + rel_file_name)
-            new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-            output = ""
-            # print("-new_local_sha1=" + new_local_sha1)
-            # print("-row['remoteSha1']=" + str(row['remoteSha1']))
-            # print("-row['localSha1']=" + str(row['localSha1']))
-            if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
-                pass
-                # files that come down as new/changed, get written to the FS trigger a file added/changed message,
-                # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
-                # don't do it.
+    try:
+        rows = files_table.search(Query().instruction == "PUT")
+        num_rows = len(rows)
+        if len(rows) > 3:
+            print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+        for row in rows:
+            rel_file_name = row['relativeFileName']
+            try:
+                abs_local_file_path = (absolute_local_root_path + rel_file_name)
+                new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+                output = ""
+                # print("-new_local_sha1=" + new_local_sha1)
+                # print("-row['remoteSha1']=" + str(row['remoteSha1']))
+                # print("-row['localSha1']=" + str(row['localSha1']))
+                if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
+                    pass
+                    # files that come down as new/changed, get written to the FS trigger a file added/changed message,
+                    # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
+                    # don't do it.
+                    not_actually_changed += 1
+                else:
+                    output = put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
+                                                                     row['remoteSha1'])  # <h1>Created</h1>
+
+                    if "txn-current-lock': Permission denied" in output:
+                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                        # TODO
+                    elif not output == "":
+                        print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
+                    if "... still being written to" not in output:
+                        osstat = os.stat(abs_local_file_path)
+                        size_ts = osstat.st_size + osstat.st_mtime
+                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
+                    if output == "":
+                        put_count += 1
+            except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
+                # Let another cycle get back to the and the GET to win.
                 not_actually_changed += 1
-            else:
-                output = put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table, row['remoteSha1'])  # <h1>Created</h1>
-
-                if "txn-current-lock': Permission denied" in output:
-                    print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
-                    # TODO
-                elif not output == "":
-                    print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
-                if "... still being written to" not in output:
-                    osstat = os.stat(abs_local_file_path)
-                    size_ts = osstat.st_size + osstat.st_mtime
-                    update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
-                if output == "":
-                    put_count += 1
-        except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
-            # Let another cycle get back to the and the GET to win.
-            not_actually_changed += 1
-            possible_clash_encountered = True
+                possible_clash_encountered = True
+                update_instruction_in_table(files_table, None, rel_file_name)
             update_instruction_in_table(files_table, None, rel_file_name)
-        update_instruction_in_table(files_table, None, rel_file_name)
+    finally:
 
-    if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
-              + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(len(rows)) + " total), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
+        if num_rows > 0:
+            print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
+                  + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
 
     return possible_clash_encountered
 
@@ -556,6 +582,9 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
+
     rows = files_table.search(Query().instruction == 'MKCOL')
 
     start = time.time()
@@ -569,9 +598,11 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
     if len(rows) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
                                                                                                                                                                                      start), 2)) + " MKCOLs/sec.")
-
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
 
 def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
 
     start = time.time()
 
@@ -600,6 +631,7 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
               + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there = False):
     ver = -1
@@ -646,6 +678,8 @@ def sleep_a_little(sleep_secs):
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - start")
+
     start = time.time()
 
     initial_queue_length = len(local_adds_chgs_deletes_queue)
@@ -672,6 +706,8 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
 
     if len(local_adds_chgs_deletes_queue) > 0:
         print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - end")
 
 
 def file_is_in_subversion(files_table, relative_file_name):
@@ -700,6 +736,8 @@ def print_rows(files_table):
 
 
 def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_adds_and_changes - start")
 
     start = time.time()
 
@@ -747,8 +785,12 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
         print(strftime('%Y-%m-%d %H:%M:%S') + ": File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
               + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_adds_and_changes - end")
 
 def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_deletes - start")
+
 
     start = time.time()
 
@@ -766,6 +808,9 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
     if duration > 10 or missed_deletes > 0 :
         print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
             duration) + ".")
+
+    print(strftime('%Y-%m-%d %H:%M:%S') + "---> enqueue_any_missed_deletes - end")
+
 
 
 def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
@@ -807,6 +852,7 @@ def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, fi
             enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
             last_missed_time = time.time()
         time.sleep(5)
+    print("END OF FALLBACK THREAD")
 
 
 

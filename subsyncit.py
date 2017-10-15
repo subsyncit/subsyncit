@@ -72,8 +72,8 @@ def debug(message):
 
 
 def my_trace(message):
-    pass
-    #print(message)
+    #pass
+    print(message)
 
 
 def calculate_sha1_from_local_file(file):
@@ -252,13 +252,13 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     start = time.time()
     unprocessed_files = {}
 
-    matches = files_table.search(Query().instruction == None)
-    for match in matches:
-        relative_file_name = match['relativeFileName']
+    rows = files_table.search(Query().instruction == None)
+    for row in rows:
+        relative_file_name = row['relativeFileName']
         if not should_be_excluded(relative_file_name, excluded_filename_patterns):
             unprocessed_files[relative_file_name] = {
-                "instruction" : match["instruction"],
-                "remoteSha1" : match['remoteSha1']
+                "instruction" : row["instruction"],
+                "remoteSha1" : row['remoteSha1']
             }
 
     get_count = 0
@@ -787,7 +787,7 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
         my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
-              + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
+              + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took " + english_duration(duration) + ".")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - end")
 
@@ -800,19 +800,22 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
 
     missed_deletes = 0
 
-    for row in files_table.search(Query().instruction == None):
+    file = Query()
+    for row in files_table.search((file.instruction == None) & (file.remoteSha1 != None)):
         if True in is_shutting_down:
             break
         relative_file_name = row['relativeFileName']
+        relative_file_name = relative_file_name
         if not os.path.exists(absolute_local_root_path + relative_file_name):
             missed_deletes += 1
             print("missed delete " + relative_file_name + " " + str(row))
-            local_adds_chgs_deletes_queue.add((row['relativeFileName'], "delete"))
+            local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     duration = time.time() - start
     if duration > 10 or missed_deletes > 0 :
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
-            duration) + ".")
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes)
+                 + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took "
+                 + english_duration(duration) + ".")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - end")
 

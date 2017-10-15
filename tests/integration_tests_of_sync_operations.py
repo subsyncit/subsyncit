@@ -542,9 +542,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         start = time.time()
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
         try:
-            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be ... ")
+            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be created and be at least " + str(sz) + "MB ... ")
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
-            print(" ... secs: " + str(round(time.time() - start, 1)))
+            print(" ... took secs: " + str(round(time.time() - start, 1)))
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 

@@ -66,9 +66,15 @@ PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
 
 
 def debug(message):
-    #pass
+    pass
     ## if not "PROPFIND" in message:
-         print(message)
+    #    print(message)
+
+
+def my_trace(message):
+    pass
+    #print(message)
+
 
 def calculate_sha1_from_local_file(file):
     hasher = hashlib.sha1()
@@ -241,27 +247,32 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
 def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
-
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
     start = time.time()
-    unprocessed_files = []
+    unprocessed_files = {}
 
     matches = files_table.search(Query().instruction == None)
     for match in matches:
         relative_file_name = match['relativeFileName']
         if not should_be_excluded(relative_file_name, excluded_filename_patterns):
-            unprocessed_files.append(relative_file_name)
+            unprocessed_files[relative_file_name] = {
+                "instruction" : match["instruction"],
+                "remoteSha1" : match['remoteSha1']
+            }
 
     get_count = 0
     for relative_file_name, rev, sha1 in files_on_svn_server:
         if should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
+        match = None
         if relative_file_name in unprocessed_files:
-                unprocessed_files.remove(relative_file_name)
-        row = files_table.get(Query().relativeFileName == relative_file_name)
-        if row:
-            if not row['remoteSha1'] == sha1:
+                match = unprocessed_files[relative_file_name]
+                unprocessed_files.pop(relative_file_name)
+        if match:
+            if match["instruction"] != None:
+                continue
+            if not match['remoteSha1'] == sha1:
                 get_count += 1
                 update_instruction_in_table(files_table, "GET", relative_file_name)
         else:
@@ -270,17 +281,15 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
 
     # files still in the unprocessed_files list are not up on Subversion
-    for relative_file_name in unprocessed_files:
-        row = files_table.get(Query().relativeFileName == relative_file_name)
-        if row:
-            update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
+    for relative_file_name, val in unprocessed_files.items():
+        update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
 
 
 def english_duration(duration):
@@ -307,7 +316,7 @@ def extract_name_type_rev(entry_xml_element):
 
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - start")
     start = time.time()
     num_rows = 0
 
@@ -315,7 +324,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         rows = files_table.search(Query().instruction == "GET")
         num_rows = len(rows)
         if len(rows) > 3:
-            print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
         for row in rows:
             relative_file_name = row['relativeFileName']
             is_file = row['isFile'] == "1"
@@ -358,14 +367,14 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     finally:
 
         if num_rows > 0:
-            print(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
                   + " files total (from " + str(len(rows)) + " total), at " + str(round(len(rows) / (time.time() - start) , 2)) + " GETs/sec.")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_GETs_per_instructions - end")
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - start")
 
     start = time.time()
 
@@ -407,9 +416,9 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
         duration = time.time() - start
         if duration > 1:
-            print(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_local_deletes_per_instructions - end")
 
 def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts):
     foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, Query().relativeFileName == relative_file_name)
@@ -491,7 +500,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     duration = time.time() - start
     if duration > 1:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
 
     return entries
 
@@ -511,7 +520,7 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
     start = time.time()
     num_rows = 0
     put_count = 0
@@ -521,7 +530,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
         rows = files_table.search(Query().instruction == "PUT")
         num_rows = len(rows)
         if len(rows) > 3:
-            print(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
         for row in rows:
             rel_file_name = row['relativeFileName']
             try:
@@ -561,10 +570,10 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
     finally:
 
         if num_rows > 0:
-            print(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
+            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
                   + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), at " + str(round(put_count / (time.time() - start), 2)) + " PUTs/sec")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
 
     return possible_clash_encountered
 
@@ -583,7 +592,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
 
     rows = files_table.search(Query().instruction == 'MKCOL')
 
@@ -596,13 +605,13 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows)) + " directories, " + str(round(len(rows) / (time.time() -
                                                                                                                                                                                      start), 2)) + " MKCOLs/sec.")
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
 
 def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
 
     start = time.time()
 
@@ -627,11 +636,11 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
               + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there = False):
     ver = -1
@@ -678,7 +687,7 @@ def sleep_a_little(sleep_secs):
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - start")
 
     start = time.time()
 
@@ -705,24 +714,14 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
             raise Exception("Unknown action " + action)
 
     if len(local_adds_chgs_deletes_queue) > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> transform_enqueued_actions_into_instructions - end")
 
 
 def file_is_in_subversion(files_table, relative_file_name):
     row = files_table.get(Query().relativeFileName == relative_file_name)
     return False if not row else row['remoteSha1'] != None
-
-
-def instruction_for_file(files_table, relative_file_name):
-    row = files_table.get(Query().relativeFileName == relative_file_name)
-    return None if not row else row['instruction']
-
-
-def size_and_timestamp_for_file(files_table, relative_file_name):
-    row = files_table.get(Query().relativeFileName == relative_file_name)
-    return None if not row else row['sz_ts']
 
 
 def print_rows(files_table):
@@ -742,9 +741,10 @@ def scantree(path):
         else:
             yield entry
 
+
 def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - start")
 
     start = time.time()
 
@@ -784,14 +784,14 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     duration = time.time() - start
     if duration > 5 or changes > 0 or add_files > 0:
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
               + " missed changes (added/changed while Subsyncit was not running) took " + english_duration(duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - end")
 
 def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - start")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - start")
 
 
     start = time.time()
@@ -809,10 +809,10 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
 
     duration = time.time() - start
     if duration > 10 or missed_deletes > 0 :
-        print(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes) + " missed DELETEs (deleted while Subsyncit was not running) took " + english_duration(
             duration) + ".")
 
-    print(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - end")
+    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - end")
 
 
 
@@ -975,10 +975,15 @@ def main(argv):
                     fallback_thread.start()
 
                 # Act on existing instructions (if any)
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path)
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, args.remote_subversion_repo_url)
+                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
                     create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,

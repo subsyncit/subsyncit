@@ -870,6 +870,12 @@ def make_requests_session(auth, verifySetting):
     return requests_session
 
 
+def make_hidden_on_windows_too(path):
+    if os.name == 'nt':
+        FILE_ATTRIBUTE_HIDDEN = 0x02
+        ret = ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
+
+
 def main(argv):
 
     if os.name != 'nt':
@@ -999,11 +1005,6 @@ def main(argv):
     if debug:
         print_rows(files_table)
 
-
-def make_hidden_on_windows_too(path):
-    if os.name == 'nt':
-        FILE_ATTRIBUTE_HIDDEN = 0x02
-        ret = ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
 
 if __name__ == "__main__":
 

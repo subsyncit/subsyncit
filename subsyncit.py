@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-14 20:02:37.169837 (UTC)
+# Version: 2017-10-16 11:58:03.688428 (UTC)
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -683,9 +683,9 @@ def write_error(absolute_local_root_path, msg):
 
 
 def sleep_a_little(sleep_secs):
-    print("sleeping " + str(sleep_secs))
+    # print("sleeping " + str(sleep_secs))
     time.sleep(sleep_secs)
-    print("slept")
+    # print("slept")
 
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
@@ -827,8 +827,11 @@ def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
         return False
     fn = absolute_local_root_path + ".subsyncit.stop"
     if os.path.isfile(fn):
-        file_system_watcher.stop()
-        file_system_watcher.join()
+        try:
+            file_system_watcher.stop()
+            file_system_watcher.join()
+        except KeyError:
+            pass
         try:
             os.remove(fn)
         except OSError:
@@ -850,18 +853,18 @@ def get_excluded_filename_patterns(requests_session, remote_subversion_repo_url)
         return []
 
 def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down):
-    last_missed_time = time.time() - 9970
-    while True not in is_shutting_down:
-        if time.time() - last_missed_time > 10000:
+    # last_missed_time = time.time() - 9970
+    # while True not in is_shutting_down:
+        # if time.time() - last_missed_time > 10000:
             # This is 1) a fallback, in case the watchdog file watcher misses something
             # And 2) a processor that's going to process additions to the local sync dir
             # that may have happened when this daemon wasn't running.
 
-            enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns)
-            enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
-            last_missed_time = time.time()
-        time.sleep(5)
-    print("END OF FALLBACK THREAD for " + absolute_local_root_path)
+    enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns)
+    enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
+            # last_missed_time = time.time()
+        # time.sleep(5)
+    # print("END OF FALLBACK THREAD for " + absolute_local_root_path)
 
 
 
@@ -985,10 +988,12 @@ def main(argv):
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
-                if not fallback_thread:
-                    fallback_thread = Thread(target=enque_missed_things,
-                                             args=(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down))
-                    fallback_thread.start()
+                # threads locking, unfortunately.....
+                # if not fallback_thread:
+                #     fallback_thread = Thread(target=enque_missed_things,
+                #                              args=(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down))
+                #     fallback_thread.start()
+                    enque_missed_things(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down)
 
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
@@ -1014,7 +1019,10 @@ def main(argv):
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
         pass
-    file_system_watcher.stop()
+    try:
+        file_system_watcher.stop()
+    except KeyError:
+        pass
     is_shutting_down.append(True)
     try:
         file_system_watcher.join()

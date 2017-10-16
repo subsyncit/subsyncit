@@ -168,9 +168,52 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
+    @timedtest
+    def test_files_with_special_characters_make_it_to_svn_and_back(self):
+
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
+
+        dir = IntegrationTestsOfSyncOperations.testSyncDir1
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
+        try:
+            with open(dir + ".foo", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + ".DS_Store", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            os.makedirs(dir + "two")
+
+            with open(dir + "two/.foo", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + "two/.DS_Store", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            with open(dir + "control", "w", encoding="utf-8") as text_file:
+                text_file.write("Hello")
+
+            start = time.time()
+
+            rc = 404
+            while rc != 200 and time.time() - start < 60:
+                rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
+                time.sleep(5)
+
+            self.assertEqual(rc, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + "two/.foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + "two/.DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
+
+        finally:
+            self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
+
 
     @timedtest
-    def test_a_files_with_special_characters_make_it_to_svn_and_back(self):
+    def test_a_files_in_a_directory_gets_pushed_up(self):
 
         # It is alleged that some characters are not allowed in right-of-the-port-number paths.
         # Between them Apache2 and Subversion munge a few for display purposes. That's either on the way into Subversion,
@@ -181,54 +224,26 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         dir = IntegrationTestsOfSyncOperations.testSyncDir1
 
-        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
+        os.mkdir(dir + "aaa")
+        with open(dir + "aaa/test.txt", "w") as text_file:
+            text_file.write("testttt")
+
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, dir)
 
         try:
-            files = ["a&a", "b{b", "c?c", "d$d", "e;e", "f=f", "g+g", "h,h",
-                  "i(i", "j)j", "k[k", "l]l", "m:m", "n\'n", "o\"o", "p`p", "q*q", "r~r"]
-            for f in files:
-                with open(dir + f, "w", encoding="utf-8") as text_file:
-                    text_file.write("Hello")
-
-            self.expect201(
-                requests.put(self.svn_repo + self.rel_dir_1 + "CONTROL",
-                             auth=(self.user, self.passwd), data="Hello",
-                             verify=False))
-
             start = time.time()
-            elapsed = 0
-
-            files_not_found_in_subversion = copy.deepcopy(files)
-
-            while len(files_not_found_in_subversion) > 1 and elapsed < 90:
-                files2 = copy.deepcopy(files_not_found_in_subversion)
-                for f in files2:
-                    if requests.get(self.svn_repo + self.rel_dir_1 + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
-                        files_not_found_in_subversion.remove(f)
-                elapsed = time.time() - start
-
-            self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
-
-            # `?` isn't handled seamlessly by the requests library
-            if requests.get(self.svn_repo + self.rel_dir_1 + "c?c".replace("?", "%3f"),
-                            auth=(self.user, self.passwd),
-                            verify=False).status_code == 200:
-                files_not_found_in_subversion.remove("c?c")
-
-            self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion) + ", sync dir: " + IntegrationTestsOfSyncOperations.testSyncDir1)
-
-            # As Subsyncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
-
-            self.wait_for_file_to_appear(IntegrationTestsOfSyncOperations.testSyncDir1 + "CONTROL")
-
-            should_be = "['CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']"
-            is_in_fact = str(sorted(os.listdir(IntegrationTestsOfSyncOperations.testSyncDir1)))
-            self.assertEquals(is_in_fact, should_be)
-
+            while True:
+                if self.path_exists_on_svn_server("aaa") and self.path_exists_on_svn_server("aaa/test.txt"):
+                    break
+                if time.time() - start > 90:
+                    self.fail("dir aaa and file aaa/test.txt should be up on " + self.svn_repo + self.rel_dir_1 + " within 90 seconds")
+                time.sleep(1.5)
 
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
+    def path_exists_on_svn_server(self, path):
+        return 200 == requests.get(self.svn_repo + self.rel_dir_1 + path, auth=(self.user, self.passwd), verify=False).status_code
 
     @timedtest
     def test_a_deleted_file_syncs_down(self):
@@ -434,8 +449,13 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
+            os.mkdir(IntegrationTestsOfSyncOperations.testSyncDir1 + "aaa")
+            with open(IntegrationTestsOfSyncOperations.testSyncDir1 + "aaa/output.txt", "w") as text_file:
+                text_file.write("Hello changed locally too")
+
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
-            time.sleep(1)
+
+            time.sleep(100)
 
             self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "Hello changed on server")
             clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]

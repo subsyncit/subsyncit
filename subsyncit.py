@@ -683,8 +683,9 @@ def write_error(absolute_local_root_path, msg):
 
 
 def sleep_a_little(sleep_secs):
+    print("sleeping " + str(sleep_secs))
     time.sleep(sleep_secs)
-    #print("slept")
+    print("slept")
 
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
@@ -959,8 +960,8 @@ def main(argv):
         from watchdog.observers.inotify import InotifyObserver
         file_system_watcher = InotifyObserver()
     elif sys.platform == "darwin":
-        from watchdog.observers.fsevents2 import FSEventsObserver2
-        file_system_watcher = FSEventsObserver2()
+        from watchdog.observers.fsevents import FSEventsObserver
+        file_system_watcher = FSEventsObserver()
     elif sys.platform == "win32":
         from watchdog.observers.read_directory_changes import WindowsApiObserver
         file_system_watcher = WindowsApiObserver

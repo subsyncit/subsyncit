@@ -31,7 +31,7 @@ def make_or_wipe_server_side_subversion_repo(svn_parent_root, repo_name, compres
       os.makedirs(svn_parent_root)
     sh.svnadmin("create", svn_parent_root + repo_name)
     sh.chown("-R", "www-data:www-data", svn_parent_root + repo_name)
-    sh.chmod("-R", "755", svn_parent_root + + repo_name)
+    sh.chmod("-R", "755", svn_parent_root + repo_name)
     sh.sync()
     for line in fileinput.FileInput(svn_parent_root + repo_name + "/db/fsfs.conf", inplace=True):
         if compression and "# compression-level" in line:

@@ -751,11 +751,14 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     start = time.time()
 
-    add_files = 0
-    changes = 0
+    to_add = 0
+    to_change = 0
     for entry in scantree(absolute_local_root_path):
         if True in is_shutting_down:
             break
+        if to_add + to_change > 100:
+            break
+
         abs_local_file_path = entry.path
         relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
         row = files_table.get(Query().relativeFileName == relative_file_name)
@@ -773,7 +776,7 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
             add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
             if not add_queued:
                 local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
-                add_files += 1
+                to_add += 1
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
             if size_ts != row["sz_ts"]:
@@ -783,43 +786,47 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
                 chg_queued = (relative_file_name, "change") in local_adds_chgs_deletes_queue
                 if not add_queued and not chg_queued:
                     local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
-                    changes += 1
+                    to_change += 1
 
     duration = time.time() - start
-    if duration > 5 or changes > 0 or add_files > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(add_files) + " missed adds and " + str(changes)
+    if duration > 5 or to_change > 0 or to_add > 0:
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
               + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took " + english_duration(duration) + ".")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_adds_and_changes - end")
+
+    return to_add + to_change
 
 def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path):
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - start")
 
-
     start = time.time()
-
-    missed_deletes = 0
+    to_delete = 0
 
     file = Query()
     for row in files_table.search((file.instruction == None) & (file.remoteSha1 != None)):
         if True in is_shutting_down:
             break
+        if to_delete > 100:
+            break
+
         relative_file_name = row['relativeFileName']
         relative_file_name = relative_file_name
         if not os.path.exists(absolute_local_root_path + relative_file_name):
-            missed_deletes += 1
+            to_delete += 1
             print("missed delete " + relative_file_name + " " + str(row))
             local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     duration = time.time() - start
-    if duration > 10 or missed_deletes > 0 :
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(missed_deletes)
+    if duration > 10 or to_delete > 0 :
+        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Fallback thread: " + str(to_delete)
                  + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took "
                  + english_duration(duration) + ".")
 
     my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> Fallback thread ---> enqueue_any_missed_deletes - end")
 
+    return to_delete
 
 
 def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
@@ -860,8 +867,8 @@ def enque_missed_things(absolute_local_root_path, excluded_filename_patterns, fi
             # And 2) a processor that's going to process additions to the local sync dir
             # that may have happened when this daemon wasn't running.
 
-    enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns)
-    enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
+    return enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns)
+    + enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path)
             # last_missed_time = time.time()
         # time.sleep(5)
     # print("END OF FALLBACK THREAD for " + absolute_local_root_path)
@@ -981,8 +988,10 @@ def main(argv):
 
             requests_session = make_requests_session(auth, verifySetting)
 
-            (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_repo_url, "",
-                                                                                                                       args.absolute_local_root_path, must_be_there=True) # root
+            (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
+                get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_repo_url, "", args.absolute_local_root_path, must_be_there=True) # root
+
+            to_add_chg_or_del = 0
             if root_revision_on_remote_svn_repo != -1:
                 excluded_filename_patterns = []
                 if iteration == 0: # At boot time only for now
@@ -993,7 +1002,7 @@ def main(argv):
                 #     fallback_thread = Thread(target=enque_missed_things,
                 #                              args=(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down))
                 #     fallback_thread.start()
-                    enque_missed_things(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down)
+                    to_add_chg_or_del = enque_missed_things(args.absolute_local_root_path, excluded_filename_patterns, files_table, local_adds_chgs_deletes_queue, is_shutting_down)
 
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
@@ -1013,7 +1022,8 @@ def main(argv):
                     last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
 
-            sleep_a_little(args.sleep_secs)
+            if to_add_chg_or_del < 200:
+                sleep_a_little(args.sleep_secs)
 #            print_rows(files_table)
             iteration += 1
     except KeyboardInterrupt:

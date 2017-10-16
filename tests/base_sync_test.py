@@ -45,7 +45,7 @@ class BaseSyncTest(unittest.TestCase):
 
         subsyncit_dir = home_dir + os.sep + ".subsyncit"
         db_dir = subsyncit_dir + os.sep + dirname.replace("/","%47").replace(":","%58").replace("\\","%92")
-        print("path of subsyncit settings=" + db_dir + " pertaining to " + dirname)
+        # print("path of subsyncit settings=" + db_dir + " pertaining to " + dirname)
         if os.path.exists(db_dir):
              shutil.rmtree(db_dir)
 

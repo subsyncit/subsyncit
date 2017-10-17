@@ -62,7 +62,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'WORKFLOWS': 'Assign to co-worker workflows',
         'WORKFLOWS2': '(coming soon)',
         'PI_CLOUD': 'Server on a Rasberry Pi or in the cloud',
-        'PI_CLOUD2': 'Or many other types of deployment',
+        'PI_CLOUD2': 'Or many other types of deployment, including the Subversion install you already have',
         'TRAY': 'Icon in the Tray (Mac: Menu bar)',
         'TRAY2': '(work in progress)',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',

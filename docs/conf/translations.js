@@ -1,7 +1,7 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
+        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use, that is backed by Subversion, has permissioned access, keeps revision history, and pleases auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -20,6 +20,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'X_PLAT': 'Works on Windows, Mac and Linux',
         'EXCEPT': 'iOS and Android coming later',
         'PYTHON': 'Simple Python client (and three Python packages) is the entire installation',
+        'PI_CLOUD': 'Server on a Rasberry Pi or in the cloud',
+        'PI_CLOUD2': 'Or many other types of deployment',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',
         'EXCLUDES': 'Files can be globally excluded from sync operations via their suffix',
         'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',

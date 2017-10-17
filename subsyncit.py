@@ -609,66 +609,85 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path, repo_root):
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
-    start = time.time()
-    num_rows = 0
-    put_count = 0
-    dirs_made = 0
-    not_actually_changed = 0
+
     possible_clash_encountered = False
-    try:
-        rows = files_table.search(Query().instruction == "PUT")
-        num_rows = len(rows)
-        if len(rows) > 0:
-            my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
-        for row in rows:
-            rel_file_name = row['relativeFileName']
-            try:
-                abs_local_file_path = (absolute_local_root_path + rel_file_name)
-                new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                output = ""
-                # print("-new_local_sha1=" + new_local_sha1)
-                # print("-row['remoteSha1']=" + str(row['remoteSha1']))
-                # print("-row['localSha1']=" + str(row['localSha1']))
-                if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
-                    pass
-                    # files that come down as new/changed, get written to the FS trigger a file added/changed message,
-                    # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
-                    # don't do it.
+    more_to_do = True
+    group = 0
+
+    # Batches of 100 so that here's intermediate reporting.
+    while more_to_do:
+        more_to_do = False
+        start = time.time()
+        num_rows = 0
+        put_count = 0
+        dirs_made = 0
+        not_actually_changed = 0
+        try:
+            rows = files_table.search(Query().instruction == "PUT")
+            num_rows = len(rows)
+            if len(rows) > 0:
+                my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+            for row in rows:
+                rel_file_name = row['relativeFileName']
+                try:
+                    abs_local_file_path = (absolute_local_root_path + rel_file_name)
+                    new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+                    output = ""
+                    # print("-new_local_sha1=" + new_local_sha1)
+                    # print("-row['remoteSha1']=" + str(row['remoteSha1']))
+                    # print("-row['localSha1']=" + str(row['localSha1']))
+                    if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
+                        pass
+                        # files that come down as new/changed, get written to the FS trigger a file added/changed message,
+                        # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
+                        # don't do it.
+                        not_actually_changed += 1
+                    else:
+                        dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
+                                                                         row['remoteSha1'], baseline_relative_path, repo_root)  # <h1>Created</h1>
+
+                        osstat = os.stat(abs_local_file_path)
+                        size_ts = osstat.st_size + osstat.st_mtime
+                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
+                        put_count += 1
+                        update_instruction_in_table(files_table, None, rel_file_name)
+                except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
+                    # Let another cycle get back to the and the GET to win.
                     not_actually_changed += 1
-                else:
-                    dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
-                                                                     row['remoteSha1'], baseline_relative_path, repo_root)  # <h1>Created</h1>
-
-                    osstat = os.stat(abs_local_file_path)
-                    size_ts = osstat.st_size + osstat.st_mtime
-                    update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
-                    put_count += 1
+                    possible_clash_encountered = True
                     update_instruction_in_table(files_table, None, rel_file_name)
-            except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
-                # Let another cycle get back to the and the GET to win.
-                not_actually_changed += 1
-                possible_clash_encountered = True
-                update_instruction_in_table(files_table, None, rel_file_name)
-            except NotPUTtingAsFileStillBeingWrittenTo as e:
-                not_actually_changed += 1
-                update_instruction_in_table(files_table, None, rel_file_name)
-            except NotPUTtingAsTheServerObjected as e:
-                not_actually_changed += 1
-                if "txn-current-lock': Permission denied" in e.message:
-                    print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
-                else:
-                    print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
-    finally:
+                except NotPUTtingAsFileStillBeingWrittenTo as e:
+                    not_actually_changed += 1
+                    update_instruction_in_table(files_table, None, rel_file_name)
+                except NotPUTtingAsTheServerObjected as e:
+                    not_actually_changed += 1
+                    if "txn-current-lock': Permission denied" in e.message:
+                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                    else:
+                        print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
+                if put_count == 100:
+                    more_to_do = True
+                    group += 1
+                    break
+        finally:
 
-        if num_rows > 0:
-            not_actually_changed_blurb = ""
-            if not_actually_changed > 0:
-                not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
-            dirs_made_blurb = ""
-            if dirs_made > 0:
-                dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
-            my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Subversion server took " + english_duration(time.time() - start) + ", " + str(put_count)
-                  + " PUT files, " + not_actually_changed_blurb + "at " + str(round(put_count / (time.time() - start), 2)) + "/sec " + dirs_made_blurb + ".")
+            if num_rows > 0:
+                not_actually_changed_blurb = ""
+                if not_actually_changed > 0:
+                    not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
+                dirs_made_blurb = ""
+                duration = time.time() - start
+                if put_count > 0:
+                    speed = "taking " + english_duration(round(duration/put_count, 2)) + " each "
+                else:
+                    speed = " "
+                    # speed = str(round(put_count / duration, 2)) + "/sec "
+                if dirs_made > 0:
+                    dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
+                my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ("" if group == 0 else "Group " + str(group) + " of")
+                         + ": PUTs on Subversion server took " + english_duration(time.time() - start) + ", " + str(put_count)
+                         + " PUT files, " + not_actually_changed_blurb
+                         + speed + dirs_made_blurb + ".")
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
 

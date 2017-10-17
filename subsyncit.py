@@ -71,9 +71,10 @@ def debug(message):
     #    print(message)
 
 
-def my_trace(message):
-    pass
-    #print(message)
+def my_trace(lvl, message):
+    # pass
+    if lvl == 1:
+        print(message)
 
 
 def calculate_sha1_from_local_file(file):
@@ -126,8 +127,24 @@ class MyTinyDBLock():
             return self.delegate.all()
 
 
-class NotPUTtingAsItWasChangedOnTheServerByAnotherUser(Exception):
+class NotPUTting(Exception):
     pass
+
+
+class NotPUTtingAsItWasChangedOnTheServerByAnotherUser(NotPUTting):
+    pass
+
+
+class NotPUTtingAsTheServerObjected(NotPUTting):
+
+    def __init__(self, status_code, content):
+        self.message = "content: " + content + " status code:" +  status_code
+
+
+class NotPUTtingAsFileStillBeingWrittenTo(NotPUTting):
+
+    def __init__(self, filename):
+        self.message = "file name: " + filename
 
 
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
@@ -214,40 +231,53 @@ def esc(name):
     return name.replace("?", "%3F").replace("&", "%26")
 
 
-def make_dir_if_missing_in_db(files_table, dir, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root):
-    if dir == "":
-        return
-    it = files_table.get(Query().relativeFileName == dir)
-    if not it:
-        if len(dir.split(os.sep)) > 1:
-            make_dir_if_missing_in_db(files_table, dirname(dir), requests_session, remote_subversion_repo_url, baseline_relative_path)
-        it = {'relativeFileName': dir,
+def make_directories_if_missing_in_db(files_table, dname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root):
+    dirs_made = 0
+    if dname == "":
+        return 0
+    dir = files_table.get(Query().relativeFileName == dname)
+
+    if not dir or dir['repoRev'] == 0:
+        parentname = dirname(dname)
+        if parentname != "":
+            parent = files_table.get(Query().relativeFileName == parentname)
+            if not parent or parent['repoRev'] == 0:
+                dirs_made += make_directories_if_missing_in_db(files_table, parentname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+
+    if not dir:
+        if len(dname.split(os.sep)) > 1:
+            make_directories_if_missing_in_db(files_table, dirname(dname), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+            dirs_made += 1
+            dir = {'relativeFileName': dname,
                             'isFile': ("0"),
                             'remoteSha1': None,
                             'localSha1': None,
                             'sz_ts': 0,
                             'instruction': None,
-                            'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                            'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_repo_url, baseline_relative_path, repo_root)
               }
-        files_table.insert(it)
-    elif it['repoRev'] == 0:
+        files_table.insert(dir)
+    elif dir['repoRev'] == 0:
+        dirs_made += 1
         files_table.update(
             {
                 'instruction': None,
-                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_repo_url, baseline_relative_path, repo_root)
             },
-            Query().relativeFileName == dir)
+            Query().relativeFileName == dname)
+    return dirs_made
 
 
 def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table, alleged_remoteSha1, baseline_relative_path, repo_root):
+    dirs_made = 0
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(0.1)
     s2 = os.path.getsize(abs_local_file_path)
     if s1 != s2:
-        return "... still being written to"
+        raise NotPUTtingAsFileStillBeingWrittenTo(abs_local_file_path)
     relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
 
-    make_dir_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+    dirs_made += make_directories_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
 
     if alleged_remoteSha1:
         (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path)
@@ -258,14 +288,14 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
     with open(abs_local_file_path, "rb") as f:
         put = requests_session.put(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), data=f.read())
         output = put.content.decode('utf-8')
-        if put.status_code == 201 or put.status_code == 204:
-            return ""
-        return str(put.status_code) + "-->" + output
+        if put.status_code != 201 and put.status_code != 204:
+            raise NotPUTtingAsTheServerObjected(put.status_code, output)
+    return dirs_made
 
 
 def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
     start = time.time()
     unprocessed_files = {}
@@ -279,7 +309,7 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
                 "remoteSha1" : row['remoteSha1']
             }
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " done populating initial unprocessed files" )
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " done populating initial unprocessed files" )
 
     get_count = 0
     for relative_file_name, rev, sha1 in files_on_svn_server:
@@ -300,7 +330,7 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
             dir_or_file = "dir" if sha1 is None else "file"
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " done iterating over files_on_svn_server")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " done iterating over files_on_svn_server")
 
     # files still in the unprocessed_files list are not up on Subversion
     for relative_file_name, val in unprocessed_files.items():
@@ -308,10 +338,10 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
 
     duration = time.time() - start
     if duration > 1:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
 
 
 def english_duration(duration):
@@ -363,7 +393,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_repo_u
 
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path, baseline_relative_path, repo_root):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_GETs_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_GETs_per_instructions - start")
     start = time.time()
     num_rows = 0
     count = 0
@@ -372,7 +402,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         rows = files_table.search(Query().instruction == "GET")
         num_rows = len(rows)
         if len(rows) > 3:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
+            my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
         for row in rows:
 
             relative_file_name = row['relativeFileName']
@@ -425,14 +455,14 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     finally:
 
         if num_rows > 0:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(count)
+            my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": GETs from Svn repo took " + english_duration(time.time() - start) + ", " + str(count)
                   + " files total (from " + str(num_rows) + " total), at " + str(round(count / (time.time() - start) , 2)) + "/sec.")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_GETs_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_GETs_per_instructions - end")
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_local_deletes_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_local_deletes_per_instructions - start")
 
     start = time.time()
 
@@ -474,9 +504,9 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
         duration = time.time() - start
         if duration > 1:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
+            my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": Performing local deletes took " + english_duration(duration) + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_local_deletes_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_local_deletes_per_instructions - end")
 
 def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts):
     foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, Query().relativeFileName == relative_file_name)
@@ -558,7 +588,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     duration = time.time() - start
     if duration > 1:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": PROFIND (root/all) on Svn repo took " + english_duration(duration) + ", for " + str(len(entries)) + " entries.")
 
     return entries
 
@@ -578,17 +608,18 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path, repo_root):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
     start = time.time()
     num_rows = 0
     put_count = 0
+    dirs_made = 0
     not_actually_changed = 0
     possible_clash_encountered = False
     try:
         rows = files_table.search(Query().instruction == "PUT")
         num_rows = len(rows)
-        if len(rows) > 3:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
+        if len(rows) > 0:
+            my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
         for row in rows:
             rel_file_name = row['relativeFileName']
             try:
@@ -605,33 +636,41 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                     # don't do it.
                     not_actually_changed += 1
                 else:
-                    output = put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
+                    dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
                                                                      row['remoteSha1'], baseline_relative_path, repo_root)  # <h1>Created</h1>
 
-                    if "txn-current-lock': Permission denied" in output:
-                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
-                        # TODO
-                    elif not output == "":
-                        print(("Unexpected on_created output for " + rel_file_name + " = [" + str(output) + "]"))
-                    if "... still being written to" not in output:
-                        osstat = os.stat(abs_local_file_path)
-                        size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
-                    if output == "":
-                        put_count += 1
+                    osstat = os.stat(abs_local_file_path)
+                    size_ts = osstat.st_size + osstat.st_mtime
+                    update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
+                    put_count += 1
+                    update_instruction_in_table(files_table, None, rel_file_name)
             except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
                 # Let another cycle get back to the and the GET to win.
                 not_actually_changed += 1
                 possible_clash_encountered = True
                 update_instruction_in_table(files_table, None, rel_file_name)
-            update_instruction_in_table(files_table, None, rel_file_name)
+            except NotPUTtingAsFileStillBeingWrittenTo as e:
+                not_actually_changed += 1
+                update_instruction_in_table(files_table, None, rel_file_name)
+            except NotPUTtingAsTheServerObjected as e:
+                not_actually_changed += 1
+                if "txn-current-lock': Permission denied" in e.message:
+                    print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                else:
+                    print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
     finally:
 
         if num_rows > 0:
-            my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Svn repo took " + english_duration(time.time() - start) + ", " + str(put_count)
-                  + " PUT files, (" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), at " + str(round(put_count / (time.time() - start), 2)) + "/sec")
+            not_actually_changed_blurb = ""
+            if not_actually_changed > 0:
+                not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
+            dirs_made_blurb = ""
+            if dirs_made > 0:
+                dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
+            my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": PUTs on Subversion server took " + english_duration(time.time() - start) + ", " + str(put_count)
+                  + " PUT files, " + not_actually_changed_blurb + "at " + str(round(put_count / (time.time() - start), 2)) + "/sec " + dirs_made_blurb + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
 
     return possible_clash_encountered
 
@@ -653,7 +692,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
 
     rows = files_table.search(Query().instruction == 'MKCOL')
 
@@ -668,13 +707,13 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
                  + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + "/sec.")
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
 
 def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
 
     start = time.time()
 
@@ -699,11 +738,11 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
             print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
 
     if len(rows) > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": DELETEs on Svn repo took " + english_duration(time.time() - start) + ", "
               + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
 
 def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there = False):
     ver = -1
@@ -765,7 +804,7 @@ def sleep_a_little(sleep_secs):
 
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> transform_enqueued_actions_into_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> transform_enqueued_actions_into_instructions - start")
 
     start = time.time()
 
@@ -792,9 +831,9 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
             raise Exception("Unknown action " + action)
 
     if len(local_adds_chgs_deletes_queue) > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": Creation of instructions from " + str(initial_queue_length) + " enqueued actions took " + english_duration(time.time() - start) + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> transform_enqueued_actions_into_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> transform_enqueued_actions_into_instructions - end")
 
 
 def file_is_in_subversion(files_table, relative_file_name):
@@ -822,7 +861,7 @@ def scantree(path):
 
 def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns, last_scanned):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_adds_and_changes - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_adds_and_changes - start")
 
     start = time.time()
 
@@ -867,16 +906,16 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     duration = time.time() - start
     if duration > 5 or to_change > 0 or to_add > 0:
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
               + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took " + english_duration(duration) + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_adds_and_changes - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_adds_and_changes - end")
 
     return to_add + to_change
 
 def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, last_scanned_path):
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_deletes - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_deletes - start")
 
     start = time.time()
     to_delete = 0
@@ -898,11 +937,11 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
 
     duration = time.time() - start
     if duration > 20 or to_delete > 0 :
-        my_trace(strftime('%Y-%m-%d %H:%M:%S') + ": " + str(to_delete)
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": " + str(to_delete)
                  + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took "
                  + english_duration(duration) + ".")
 
-    my_trace(strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_deletes - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> enqueue_any_missed_deletes - end")
 
     return to_delete
 

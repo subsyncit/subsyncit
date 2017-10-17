@@ -1,7 +1,7 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
+        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that is backed by Subversion, has permissioned access, keeps revision history, and pleases auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -20,6 +20,12 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'X_PLAT': 'Works on Windows, Mac and Linux',
         'EXCEPT': 'iOS and Android coming later',
         'PYTHON': 'Simple Python client (and three Python packages) is the entire installation',
+        'WORKFLOWS': 'Assign to co-worker workflows',
+        'WORKFLOWS2': '(coming soon)',
+        'PI_CLOUD': 'Server on a Rasberry Pi or in the cloud',
+        'PI_CLOUD2': 'Or many other types of deployment',
+        'TRAY': 'Icon in the Tray (Mac: Menu bar)',
+        'TRAY2': '(work in progress)',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',
         'EXCLUDES': 'Files can be globally excluded from sync operations via their suffix',
         'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
@@ -29,11 +35,12 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
         'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
-        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT people<br>right now while this is in BETA (sorry).'
+        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
+        ' people<br>right now while this is in BETA (sorry). Click on the octocat:'
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
+        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that is backed by Subversion, has permissioned access, keeps revision history, and pleases auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -52,6 +59,12 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'X_PLAT': 'Works on Windows, Mac and Linux',
         'EXCEPT': 'iOS and Android coming later',
         'PYTHON': 'Simple Python client (and three Python packages) is the entire installation',
+        'WORKFLOWS': 'Assign to co-worker workflows',
+        'WORKFLOWS2': '(coming soon)',
+        'PI_CLOUD': 'Server on a Rasberry Pi or in the cloud',
+        'PI_CLOUD2': 'Or many other types of deployment',
+        'TRAY': 'Icon in the Tray (Mac: Menu bar)',
+        'TRAY2': '(work in progress)',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',
         'EXCLUDES': 'Files can be globally excluded from sync operations via their suffix',
         'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
@@ -61,7 +74,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
         'PH_FRIEND': 'Paul&apos;s friend',
         'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
-        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT people<br>right now while this is in BETA (sorry).'
+        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
+        ' people<br>right now while this is in BETA (sorry). Click on the octocat:'
     });
 
     var userLang = navigator.language || navigator.userLanguage;

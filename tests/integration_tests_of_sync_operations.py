@@ -338,21 +338,21 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_a_file_changed_while_sync_agent_offline_still_sync_syncs_later(self):
 
-        #TODO
         self.expect201(requests.put(self.svn_repo + "integrationTests/output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+
         p1, p2 = self.start_two_subsyncits("integrationTests/")
 
         try:
-            op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
-            op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
-            self.wait_for_file_to_appear(op1)
-            self.wait_for_file_to_appear(op2)
+            file_in_subsyncit_one = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
+            file_in_subsyncit_two = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_one)
+            self.wait_for_file_to_appear(file_in_subsyncit_two)
             self.signal_stop_of_subsyncIt(IntegrationTestsOfSyncOperations.testSyncDir2)
             p2.wait()
-            with open(op2, "w") as text_file:
+            with open(file_in_subsyncit_two, "w") as text_file:
                 text_file.write("Hello to you too")
             p2 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir2)
-            self.wait_for_file_contents_to_contain(op1, "Hello to you too")
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Hello to you too")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
@@ -455,7 +455,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            time.sleep(100)
+            time.sleep(10)
 
             self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "Hello changed on server")
             clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
@@ -468,7 +468,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1 = self.start_subsyncit("https://example.com/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="dontLeakRealPasswordToExampleDotCom")
         try:
-            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 405 for: https://example.com/")
+            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "Cannot attach to remote")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -478,7 +478,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "PROPFIND status: 401 for: " + self.svn_repo + "integrationTests/")
+            self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + ".subsyncit.err", "Cannot attach to remote") # and more
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -501,7 +501,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                                         auth=(self.user, self.passwd),
                                         verify=False))
 
-        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.foo\n.*\.txt\n\~\$.*\n.*\.bar", verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.txt\n\~\$.*\n", verify=False))
 
         op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
         with open(op1, "w") as text_file:
@@ -511,37 +511,28 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         with open(op1, "w") as text_file:
             text_file.write("I also should not be PUT up to the server")
 
-        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "~output"
-        with open(op1, "w") as text_file:
-            text_file.write("I also should not be PUT up to the server")
-
-        op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "$output"
-        with open(op1, "w") as text_file:
-            text_file.write("I also should not be PUT up to the server")
-
         op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.zzz"
         with open(op1, "w") as text_file:
-            text_file.write("Hello to you too")
+            text_file.write("Only I can go to the server")
 
         p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir1)
 
         try:
 
             self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "output.zzz")
-            self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "$output")
-            self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "~output")
 
-            time.sleep(5) # the two files should arrive pretty much at the same time, but why not wait 3 secs, heh?
+            time.sleep(5) # the all files should arrive pretty much at the same time, but why not wait 5 secs, heh?
 
-            self.assertNotEqual(
+            self.assertEqual(
                 requests.get(self.svn_repo + self.rel_dir_1 + "output.txt",
                                  auth=(self.user, self.passwd), verify=False)
-                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "output.txt" + " should NOT have appeared, but it did")
+                    .status_code, 404, "URL " + self.svn_repo + self.rel_dir_1 + "output.txt" + " should NOT have appeared, but it did")
 
-            self.assertNotEqual(
+            self.assertEqual(
                 requests.get(self.svn_repo + self.rel_dir_1 + "~$output",
                                  auth=(self.user, self.passwd), verify=False)
-                    .status_code, 200, "URL " + self.svn_repo + self.rel_dir_1 + "~$output" + " should NOT have appeared, but it did")
+                    .status_code, 404, "URL " + self.svn_repo + self.rel_dir_1 + "~$output" + " should NOT have appeared, but it did")
+
 
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)

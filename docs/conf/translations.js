@@ -2,7 +2,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
         'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
-        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
+        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
         'LIST': 'Basic file-sync features',
@@ -34,7 +34,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
 
     $translateProvider.translations('es', {
         'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
-        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
+        'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
         'LIST': 'Basic file-sync features',

@@ -1,13 +1,13 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'A file sync client for the office that is backed by <strong>Subversion</strong>, with revision history that will pass audits, permissions, and built for multiple users',
+        'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
         'LIST': 'Basic file-sync features',
         'FILE_TYPES': 'Large and small file types',
-        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, picts too.',
+        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, pictures too',
         'DIRECT': 'Users can setup file sync for a subdirectory of a larger tree',
         'RW_PERMS': 'Multi-user with read and write permissions',
         'RW_PERMS2': 'Permissions can be set at any place in the directory tree for users and groups',
@@ -18,7 +18,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'CLI_TOOLS': 'Like &apos;checkout&apos; and &apos;commit&apos;, as well as batch operations',
         'STILL_READING': 'Less main stream features',
         'X_PLAT': 'Works on Windows, Mac and Linux',
-        'EXCEPT': 'Not for iOS or Android, yet',
+        'EXCEPT': 'iOS and Android coming later',
         'PYTHON': 'Simple Python client (and three Python packages) is the entire installation',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',
         'EXCLUDES': 'Files can be globally excluded from sync operations via their suffix',
@@ -33,13 +33,13 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'A file sync client for the office that is backed by <strong>Subversion</strong>, with revision history, permissions, and built for multiple users',
+        'TAGLINE': 'A multi-user file sync client for office use that is backed by <strong>Subversion</strong>, with permissioned access, revision history, and that will pass audits.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
         'LIST': 'Basic file-sync features',
         'FILE_TYPES': 'Large and small file types',
-        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, picts too.',
+        'ALL_SORTS': 'Excel Spreadsheets, Word documents, Powerpoint presentation, etc. Movies, music, pictures too',
         'DIRECT': 'Users can setup file sync for a subdirectory of a larger tree',
         'RW_PERMS': 'Multi-user with read and write permissions',
         'RW_PERMS2': 'Permissions can be set at any place in the directory tree for users and groups',
@@ -50,7 +50,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'CLI_TOOLS': 'Like &apos;checkout&apos; and &apos;commit&apos;, as well as batch operations',
         'STILL_READING': 'Less main stream features',
         'X_PLAT': 'Works on Windows, Mac and Linux',
-        'EXCEPT': 'Not for iOS or Android, yet',
+        'EXCEPT': 'iOS and Android coming later',
         'PYTHON': 'Simple Python client (and three Python packages) is the entire installation',
         'NO_SVN': 'No client-side installation of Subversion at all means no &apos;working copy&apos; or .svn folders (or duplicated files)',
         'EXCLUDES': 'Files can be globally excluded from sync operations via their suffix',

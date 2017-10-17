@@ -464,7 +464,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
     @timedtest
-    def test_cant_sync_against_non_svn_dav_site(self):
+    def test_cant_start_on_a_non_svn_dav_server(self):
 
         p1 = self.start_subsyncit("https://example.com/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="dontLeakRealPasswordToExampleDotCom")
         try:
@@ -474,7 +474,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
 
     @timedtest
-    def test_cant_access_svn_dav_site_with_incorrect_password(self):
+    def test_cant_start_on_a_svn_dav_server_with_incorrect_password(self):
 
         p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
@@ -484,7 +484,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
 
     @timedtest
-    def test_cant_sync_against_down_site(self):
+    def test_cant_start_on_a_down_server(self):
 
         p1 = self.start_subsyncit("https://localhost:34456/", IntegrationTestsOfSyncOperations.testSyncDir1)
         try:

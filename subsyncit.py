@@ -214,29 +214,37 @@ def esc(name):
     return name.replace("?", "%3F").replace("&", "%26")
 
 
-def make_dir_if_missing_in_db(files_table, dir, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root):
-    if dir == "":
+def make_dir_if_missing_in_db(files_table, dirname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root):
+    if dirname == "":
         return
-    it = files_table.get(Query().relativeFileName == dir)
-    if not it:
-        if len(dir.split(os.sep)) > 1:
-            make_dir_if_missing_in_db(files_table, dirname(dir), requests_session, remote_subversion_repo_url, baseline_relative_path)
-        it = {'relativeFileName': dir,
+    dir = files_table.get(Query().relativeFileName == dirname)
+
+    if not dir or dir['repoRev'] == 0:
+        parentname = dirname(dirname)
+        if parentname != "":
+            parent = files_table.get(Query().relativeFileName == parentname)
+            if not parent or parentname['repoRev'] == 0:
+                make_dir_if_missing_in_db(files_table, parentname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+
+    if not dir:
+        if len(dirname.split(os.sep)) > 1:
+            make_dir_if_missing_in_db(files_table, dirname(dirname), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+            dir = {'relativeFileName': dirname,
                             'isFile': ("0"),
                             'remoteSha1': None,
                             'localSha1': None,
                             'sz_ts': 0,
                             'instruction': None,
-                            'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                            'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dirname, remote_subversion_repo_url, baseline_relative_path, repo_root)
               }
-        files_table.insert(it)
-    elif it['repoRev'] == 0:
+        files_table.insert(dir)
+    elif dir['repoRev'] == 0:
         files_table.update(
             {
                 'instruction': None,
-                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dirname, remote_subversion_repo_url, baseline_relative_path, repo_root)
             },
-            Query().relativeFileName == dir)
+            Query().relativeFileName == dirname)
 
 
 def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table, alleged_remoteSha1, baseline_relative_path, repo_root):

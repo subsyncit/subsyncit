@@ -1,7 +1,7 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that uses Apache&apos;s Subversion as a cost-effective backing store, has permissioned access, keeps revision' +
+        'TAGLINE': 'A <strong>file sync client</strong> for office teams that uses Apache&apos;s Subversion as a cost-effective backing store, has permissioned access, keeps revision' +
         ' history, and pleases auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
@@ -42,7 +42,7 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that uses Apache&apos;s Subversion as a cost-effective backing store, has permissioned access, keeps revision' +
+        'TAGLINE': 'A <strong>file sync client</strong> for office teams that uses Apache&apos;s Subversion as a cost-effective backing store, has permissioned access, keeps revision' +
         ' history, and pleases auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',

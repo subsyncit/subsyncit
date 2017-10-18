@@ -311,6 +311,7 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " done populating initial unprocessed files" )
 
     get_count = 0
+    local_deletes = 0
     for relative_file_name, rev, sha1 in files_on_svn_server:
         if should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
@@ -333,11 +334,12 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
 
     # files still in the unprocessed_files list are not up on Subversion
     for relative_file_name, val in unprocessed_files.items():
+        local_deletes += 1
         update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
 
     duration = time.time() - start
-    if duration > 1:
-        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(len(unprocessed_files))
+    if duration > 1 or get_count > 0 or local_deletes > 0:
+        my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
               + " local deletes (comparison of all the files up on Svn to local files) took " + english_duration(duration) + ".")
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
@@ -465,40 +467,19 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
     start = time.time()
 
-    try:
-        rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
+    rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
 
+    try:
         for row in rows:
             relative_file_name = row['relativeFileName']
-
-            # TODO confirm via history.
-
-            if row['isFile'] == 0:
-                files_table.remove(Query().relativeFileName == relative_file_name)
-
-                # TODO LIKE
-
-            else:
-                files_table.remove(Query().relativeFileName.test(lambda rfn: rfn.startswith('relative_file_name')))
-
             name = (absolute_local_root_path + relative_file_name)
             try:
                 os.remove(name)
+                files_table.remove(Query().relativeFileName == relative_file_name)
             except OSError:
-                try:
-                    shutil.rmtree(name)
-                except OSError:
-                    pass
-            parent = os.path.dirname(relative_file_name)
-            path_parent = absolute_local_root_path + parent
-            if os.path.exists(path_parent):
-                listdir = os.listdir(path_parent)
-                if len(listdir) == 0:
-                    try:
-                        shutil.rmtree(path_parent)
-                        files_table.remove(Query().relativeFileName == parent)
-                    except OSError:
-                        pass
+                # has child dirs/files - shouldn't be deleted - can be on next pass.
+                continue
+
     finally:
 
         duration = time.time() - start
@@ -528,7 +509,7 @@ def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instr
                             'localSha1': None,
                             'sz_ts': 0,
                             'instruction': instruction,
-                            'repoRev': 0})
+                            'repoRev': rev})
         return
 
     if instruction is not None:
@@ -640,7 +621,9 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                         # files that come down as new/changed, get written to the FS trigger a file added/changed message,
                         # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
                         # don't do it.
-                        not_actually_changed += 1
+
+                        num_rows = num_rows -1
+                        update_instruction_in_table(files_table, None, rel_file_name)
                     else:
                         dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
                                                                          row['remoteSha1'], baseline_relative_path, repo_root)  # <h1>Created</h1>
@@ -903,9 +886,7 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
         in_subversion = row and row['remoteSha1'] != None
         if row and row['instruction'] != None: # or row['isFile'] == "1")
             continue
-
         if not in_subversion:
-            # print("xFile to add: " + relative_file_name + " is not in subversion")
             add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
             if not add_queued:
                 local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))

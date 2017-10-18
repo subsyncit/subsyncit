@@ -25,10 +25,16 @@ import sh
 
 class BaseSyncTest(unittest.TestCase):
 
+
+
     line = ""
 
     def setup(self):
         self.line = ""
+        self.user = "davsvn"
+        self.passwd = "davsvn"
+        self.svn_repo = "http://127.0.0.1:8099/"
+
 
     def reset_test_dir(self, dirname):
         if os.path.exists(dirname):
@@ -91,6 +97,7 @@ class BaseSyncTest(unittest.TestCase):
         p2 = self.start_subsyncit(self.svn_repo + dir, self.testSyncDir2)
         return p1, p2
 
+
     def start_subsyncit(self, svn_repo, dir, passwd=None):
         if passwd is None:
             passwd = self.passwd
@@ -105,13 +112,13 @@ class BaseSyncTest(unittest.TestCase):
     def wait_for_file_contents_to_be_sized_above(self, f, sz):
         self.wait_for_file_to_appear(f)
         while os.stat(f).st_size < sz:
-            time.sleep(1)
+            time.sleep(.05)
 
 
     def wait_for_file_contents_to_be_sized_below(self, f, sz):
         self.wait_for_file_to_appear(f)
         while os.stat(f).st_size >= sz:
-            time.sleep(1)
+            time.sleep(.05)
 
 
     def wait_for_file_contents_to_contain(self, f, val):
@@ -121,7 +128,7 @@ class BaseSyncTest(unittest.TestCase):
         ix = 0
         while val not in contents:
             ix += 1
-            if ix > 90:
+            if ix > 15:
                 self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
             time.sleep(1)
             contents = self.file_contents(f)
@@ -136,7 +143,7 @@ class BaseSyncTest(unittest.TestCase):
         ix = 0
         while os.path.exists(f):
             ix += 1
-            if ix > 75:
+            if ix > 45:
                 self.fail("file " + f + " didn't disappear in 45 secs")
             time.sleep(1)
 

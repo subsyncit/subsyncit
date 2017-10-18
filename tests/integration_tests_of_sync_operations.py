@@ -26,6 +26,8 @@ from decorator import decorator
 
 from base_sync_test import BaseSyncTest
 from recreate_svn_repo import make_or_wipe_server_side_subversion_repo
+import docker
+from docker.errors import NotFound
 
 
 class IntegrationTestsOfSyncOperations(BaseSyncTest):
@@ -35,25 +37,54 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     testSyncDir2 = ""
     p1 = None
     p2 = None
+    container = None
 
-    def __init__(self, testname, svnrepo, user, svnrepo_root, size, pword):
+    def __init__(self, testname, size):
         super(IntegrationTestsOfSyncOperations, self).__init__(testname)
-        BaseSyncTest.svn_repo = svnrepo
-        BaseSyncTest.user = user
-        BaseSyncTest.passwd = pword
         BaseSyncTest.size = size
         BaseSyncTest.output = ""
-        BaseSyncTest.svnrepo_root = svnrepo_root
+        self.user = "davsvn"
+        self.passwd = "davsvn"
+        self.svn_repo = "http://127.0.0.1:8099/svn/testrepo/"
 
 
     @classmethod
     def setUpClass(cls):
         sh.rm("-rf", str(sh.pwd()).strip('\n') + "/integrationTests/")
 
+        client = docker.from_env()
+
+        try:
+            ctr = client.containers.get("subsyncitTests")
+            ctr.stop()
+            status = 200
+            while status == 200:
+                status = -1
+                try:
+                    get = requests.get("http://127.0.0.1:8099")
+                    status = get.status_code
+                except:
+                    pass
+            while client.containers.get("subsyncitTests"):
+                time.sleep(0.2)
+                pass # keep looping until there's an exception
+        except NotFound:
+            pass
+
+        client.containers.run("subsyncit/alpine-svn-dav", name="subsyncitTests", detach=True, ports={'80/tcp': 8099}, auto_remove=True)
+        content = ""
+        while "It works!" not in content:
+            try:
+                get = requests.get("http://127.0.0.1:8099")
+                content = get.content.decode("utf-8")
+            except requests.exceptions.ConnectionError:
+                pass
+
+        requests.request('MKCOL', "http://127.0.0.1:8099/svn/testrepo/integrationTests", auth=("davsvn", "davsvn"), verify=False)
+
     def setUp(self):
 
         IntegrationTestsOfSyncOperations.i += 1
-
         IntegrationTestsOfSyncOperations.rel_dir_1 = "integrationTests/1_" + str(IntegrationTestsOfSyncOperations.i) + "/"
         IntegrationTestsOfSyncOperations.testSyncDir1 = str(sh.pwd()).strip('\n') + IntegrationTestsOfSyncOperations.rel_dir_1
         self.reset_test_dir(IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -61,11 +92,13 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         IntegrationTestsOfSyncOperations.testSyncDir2 = str(sh.pwd()).strip('\n') + IntegrationTestsOfSyncOperations.rel_dir_2
         self.reset_test_dir(IntegrationTestsOfSyncOperations.testSyncDir2)
 
-        make_or_wipe_server_side_subversion_repo(svnrepo_root, "integrationTests", True, True, True)
+        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
+
 
     def teardown(self):
         self.end(IntegrationTestsOfSyncOperations.p1, IntegrationTestsOfSyncOperations.testSyncDir1)
         self.end(IntegrationTestsOfSyncOperations.p2, IntegrationTestsOfSyncOperations.testSyncDir2)
+
 
     def end(self, p, dir):
         if p is not None:
@@ -128,8 +161,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_a_hidden_files_dont_get_put_into_svn(self):
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
-
         dir = IntegrationTestsOfSyncOperations.testSyncDir1
 
         p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -170,8 +201,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
     @timedtest
     def test_files_with_special_characters_make_it_to_svn_and_back(self):
-
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
 
         dir = IntegrationTestsOfSyncOperations.testSyncDir1
 
@@ -220,8 +249,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         # or on the way back over HTTP into the file system. No matter - the most important representation of file name
         # is in the file system, and we only require consistent GET/PUT from/to that.
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
-
         dir = IntegrationTestsOfSyncOperations.testSyncDir1
 
         os.mkdir(dir + "aaa")
@@ -248,7 +275,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_a_deleted_file_syncs_down(self):
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), data="Hello",
                      verify=False))
 
@@ -261,39 +287,10 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
-    @timedtest
-    def test_a_deleted_file_can_have_its_parent_dir_deleted_too(self):
-
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
-
-        self.expect201(requests.request('MKCOL',
-                                        self.svn_repo + self.rel_dir_1 + "fred/",
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
-
-        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "fred/output.txt",
-                     auth=(self.user, self.passwd), data="Hello",
-                     verify=False))
-
-        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
-        try:
-            output_txt_ = IntegrationTestsOfSyncOperations.testSyncDir1 + "fred/output.txt"
-            self.wait_for_file_to_appear(output_txt_)
-            requests.delete(self.svn_repo + self.rel_dir_1 + "fred/output.txt",
-                            auth=(self.user, self.passwd), verify=False)
-            self.wait_for_file_to_disappear(output_txt_)
-            self.wait_for_file_to_disappear(IntegrationTestsOfSyncOperations.testSyncDir1 + "fred")
-
-        finally:
-            self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
-
 
     @timedtest
     def test_a_deleted_file_syncs_up(self):
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1[:-1], auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), data="Hello",
                      verify=False))
 
@@ -338,9 +335,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_a_file_changed_while_sync_agent_offline_still_sync_syncs_later(self):
 
-        self.expect201(requests.put(self.svn_repo + "integrationTests/output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+        self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
 
-        p1, p2 = self.start_two_subsyncits("integrationTests/")
+        p1, p2 = self.start_two_subsyncits(self.rel_dir_1)
 
         try:
             file_in_subsyncit_one = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
@@ -350,9 +347,10 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.signal_stop_of_subsyncIt(IntegrationTestsOfSyncOperations.testSyncDir2)
             p2.wait()
             with open(file_in_subsyncit_two, "w") as text_file:
-                text_file.write("Hello to you too")
-            p2 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir2)
-            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Hello to you too")
+                text_file.write("Overrite locally in client 2")
+            p2 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, self.testSyncDir2)
+            # p2 = self.start_subsyncit(self.svn_repo + dir, self.testSyncDir2)
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Overrite locally in client 2")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
@@ -360,10 +358,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
     @timedtest
     def test_a_file_in_dir_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
-
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
 
         self.expect201(requests.request('MKCOL',
                                         self.svn_repo + self.rel_dir_1 + "fred/",
@@ -383,9 +377,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_that_excluded_patterns_work(self):
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
 
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.foo\n.*\.txt\n.*\.bar", verify=False))
 
@@ -410,10 +401,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
     @timedtest
     def test_a_file_in_dir_with_spaces_in_names_are_added_to_repo_while_sync_agent_offline_still_sync_syncs_later(self):
-
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
 
         self.expect201(requests.request('MKCOL',
                                         self.svn_repo + self.rel_dir_1 + "f r e d/",
@@ -497,10 +484,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
     @timedtest
     def test_an_excluded_filename_patterns_is_not_pushed_up(self):
 
-        self.expect201(requests.request('MKCOL', self.svn_repo + self.rel_dir_1,
-                                        auth=(self.user, self.passwd),
-                                        verify=False))
-
         self.expect201(requests.put(self.svn_repo + self.rel_dir_1 + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.txt\n\~\$.*\n", verify=False))
 
         op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
@@ -543,17 +526,17 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         filename = str(sh.pwd()).strip('\n') + "/testBigRandomFile"
         start = time.time()
-        self.make_a_big_random_file(filename, start, self.size)
+        self.make_a_big_random_file(filename, self.size)
 
         sz = os.stat(filename).st_size
-        self.upload_file(filename, self.svn_repo + "integrationTests/testBigRandomFile")
+        self.upload_file(filename, self.svn_repo + self.rel_dir_1 + "testBigRandomFile")
 
         # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
         start = time.time()
-        p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
+        p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
         try:
-            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be created and be at least " + str(sz) + "MB ... ")
+            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be created and be at least " + str(sz) + " MB ... ")
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
             print(" ... took secs: " + str(round(time.time() - start, 1)))
 
@@ -564,18 +547,18 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            self.make_a_big_random_file(filename, start, self.size)
+            self.make_a_big_random_file(filename, self.size)
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            self.upload_file(filename, self.svn_repo + "integrationTests/testBigRandomFile")
+            self.upload_file(filename, self.svn_repo + self.rel_dir_1 + "testBigRandomFile")
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             start = time.time()
 
             print("start p1 again")
-            p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
+            p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_below(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
@@ -587,12 +570,13 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             time.sleep(5)
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
-            print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the ntegration test suite")
-            print("Aborted file size: " + str(aborted_get_size) + " of intended size " + str(sz))
+            print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite")
 
-            # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+            self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size " + str(sz))
 
-            p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
+            #self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
+
+            p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -603,8 +587,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
         self.assertEqual(os.stat(clash_file).st_size, aborted_get_size)
 
-    def make_a_big_random_file(self, filename, start, size):
-        print("Making " + size + "MB random file ... ")
+    def make_a_big_random_file(self, filename, size):
+        start = time.time()
+        print("Making " + size + " MB random file ... ")
         sh.bash("tests/make_a_so_big_file.sh", filename, size)
         print(" ... secs: " + str(round(time.time() - start, 1)))
 
@@ -614,7 +599,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         if len(glob) == 0:
             print("  no files")
         for s in glob:
-            print("  " + (str(s)))
+            print("  " + (str(s)) + " " + str(os.stat(str(s)).st_size))
 
     def expect201(self, commandOutput):
         self.assertEqual("<Response [201]>", str(commandOutput))
@@ -628,12 +613,7 @@ if __name__ == '__main__':
 
     test_name = sys.argv[1].lower()
 
-    svnrepo = sys.argv[2]
-    user = sys.argv[3]
-    pword = getpass.getpass(prompt="Subverison password for " + user + ": ")
-
-    svnrepo_root = sys.argv[4]
-    size = sys.argv[5]
+    size = sys.argv[2]
 
     test_loader = unittest.TestLoader()
     test_names = test_loader.getTestCaseNames(IntegrationTestsOfSyncOperations)
@@ -641,9 +621,9 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
     if test_name == "all":
         for tname in test_names:
-            suite.addTest(IntegrationTestsOfSyncOperations(tname, svnrepo, user, svnrepo_root, size, pword))
+            suite.addTest(IntegrationTestsOfSyncOperations(tname, size))
     else:
-        suite.addTest(IntegrationTestsOfSyncOperations(test_name, svnrepo, user, svnrepo_root, size, pword))
+        suite.addTest(IntegrationTestsOfSyncOperations(test_name, size))
 
     result = unittest.TextTestRunner().run(suite)
     sys.exit(not result.wasSuccessful())

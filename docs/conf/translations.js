@@ -1,7 +1,8 @@
 ourApp.config(['$translateProvider', function ($translateProvider) {
     $translateProvider.useSanitizeValueStrategy(null);
     $translateProvider.translations('en', {
-        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that is backed by Subversion, has permissioned access, keeps revision history, and pleases auditors.',
+        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that uses Apache&aposs Subversion as a backing store, has permissioned access, keeps revision history, and pleases' +
+        ' auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -25,8 +26,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'TRAY': 'Icon in the Tray (Mac: Menu bar)',
         'TRAY2': '(work in progress)',
         'NO_SVN': 'No client-side installation of Subversion at all means there is no &apos;working copy&apos; or .svn folders (or duplicated files)',
-        'EXCLUDES': 'Temp iles can be globally excluded from sync operations via their suffix',
-        'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
+        'EXCLUDES': 'Temp files can be globally excluded from sync operations via their suffix',
+        'EXCLUDES2': 'Some applications like MS Word and Excel make a temp backup file while the document is being edited, like &apos~$docname.docx&apos;',
         'TESTIMONIALS': 'Testimonials from those using it',
         'TESTIMONIAL_1': 'I have been using this for a year and love it. It is just what I have always wanted',
         'PH': 'Paul Hammant',
@@ -41,7 +42,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
     });
 
     $translateProvider.translations('es', {
-        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that is backed by Subversion, has permissioned access, keeps revision history, and pleases auditors.',
+        'TAGLINE': 'A multi-user <strong>file sync client</strong> for office use that uses Apache&aposs Subversion as a backing store, has permissioned access, keeps revision history, and pleases' +
+        ' auditors.',
         'FOOTER': '&copy; 2016, 2017 <b>Paul Hammant</b>. All Rights Reserved. Subversion is an open source product from the <a href="https://apache.org">Apache Software Foundation</a>',
         'KNOW_MORE': 'MORE INFO?',
         'FEATURES': 'Features',
@@ -65,8 +67,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'TRAY': 'Icon in the Tray (Mac: Menu bar)',
         'TRAY2': '(work in progress)',
         'NO_SVN': 'No client-side installation of Subversion at all means there is no &apos;working copy&apos; or .svn folders (or duplicated files)',
-        'EXCLUDES': 'Temp iles can be globally excluded from sync operations via their suffix',
-        'EXCLUDES2': 'Some applications make a temp backup file while editing, like &apos;.bak&apos;',
+        'EXCLUDES': 'Temp files can be globally excluded from sync operations via their suffix',
+        'EXCLUDES2': 'Some applications like MS Word and Excel make a temp backup file while the document is being edited, like &apos~$docname.docx&apos;',
         'TESTIMONIALS': 'Testimonials from those using it',
         'TESTIMONIAL_1': 'I have been using this for a year and love it. It is just what I have always wanted',
         'PH': 'Paul Hammant',

@@ -34,8 +34,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'ADVANCED': 'Advanced features for office use',
         'WORKFLOWS': '"Assign to co-worker" workflows',
         'WORKFLOWS2': 'A boss would assign the update of a spreadsheet to, say, "Fred" when "Wilma" normally does it: "Spreadsheet X is now on your C: drive, Fred, can you add today&apos;s totals and let' +
-        ' me know when you&apos;re done, thanks". Feature coming soon.',
-        'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
+        ' me know when you&apos;re done, thanks". Feature coming soon. (placeholder 1)',
+        'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon. (placeholder 2)',
         'PH_FRIEND': 'Paul&apos;s friend',
         'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
         'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
@@ -76,8 +76,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         'ADVANCED': 'Advanced features for office use',
         'WORKFLOWS': '"Assign to co-worker" workflows',
         'WORKFLOWS2': 'A boss would assign the update of a spreadsheet to, say, "Fred" when "Wilma" normally does it: "Spreadsheet X is now on your C: drive, Fred, can you add today&apos;s totals and let' +
-        ' me know when you&apos;re done, thanks". Feature coming soon.',
-        'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon',
+        ' me know when you&apos;re done, thanks". Feature coming soon. (place holder 1)',
+        'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon. (place holder 2)',
         'PH_FRIEND': 'Paul&apos;s friend',
         'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
         'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +

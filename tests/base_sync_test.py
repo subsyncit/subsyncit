@@ -63,23 +63,21 @@ class BaseSyncTest(unittest.TestCase):
             text_file.write("anything")
 
     def wait_for_file_to_appear(self, op2):
-        ix = 0
         while not os.path.exists(op2):
-            ix += 1
-            if ix > 45:
+            start = time.time()
+            if time.time() - start > 15:
                 self.fail("no sync'd file")
-            time.sleep(1)
+            time.sleep(.1)
 
 
     def wait_for_URL_to_appear(self, url):
-        ix = 0
 
         status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
         while status == 404:
-            ix += 1
-            if ix > 45:
+            start = time.time()
+            if time.time() - start > 15:
                 break
-            time.sleep(1)
+            time.sleep(.1)
             status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
 
         if status != 200:
@@ -110,24 +108,30 @@ class BaseSyncTest(unittest.TestCase):
 
     def wait_for_file_contents_to_be_sized_above(self, f, sz):
         self.wait_for_file_to_appear(f)
+        start = time.time()
         while os.stat(f).st_size < sz:
             time.sleep(.05)
+            if time.time() - start > 15:
+                self.fail("should have made it above that size by now")
 
 
     def wait_for_file_contents_to_be_sized_below(self, f, sz):
         self.wait_for_file_to_appear(f)
+        start = time.time()
         while os.stat(f).st_size >= sz:
             time.sleep(.05)
+            if time.time() - start > 15:
+                self.fail("should have made it below that size by now")
 
 
     def wait_for_file_contents_to_contain(self, f, val):
 
         self.wait_for_file_to_appear(f)
         contents = self.file_contents(f)
-        ix = 0
+        start = time.time()
+
         while val not in contents:
-            ix += 1
-            if ix > 15:
+            if time.time() - start > 15:
                 self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
             time.sleep(1)
             contents = self.file_contents(f)
@@ -139,10 +143,9 @@ class BaseSyncTest(unittest.TestCase):
         return contents
 
     def wait_for_file_to_disappear(self, f):
-        ix = 0
+        start = time.time()
         while os.path.exists(f):
-            ix += 1
-            if ix > 45:
+            if time.time() - start > 15:
                 self.fail("file " + f + " didn't disappear in 45 secs")
             time.sleep(1)
 

@@ -107,7 +107,7 @@ class MyRequestsTracer():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = True
+        self.always_print = False
 
     def mkcol(self, arg0):
         start = time.time()
@@ -221,7 +221,7 @@ class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = True
+        self.always_print = False
 
     def search(self, arg0):
         start = time.time()

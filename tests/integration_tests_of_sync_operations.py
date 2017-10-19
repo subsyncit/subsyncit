@@ -126,9 +126,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                 text_file.write("Hello")
             op2 = IntegrationTestsOfSyncOperations.testSyncDir2 + "output.txt"
             self.wait_for_file_to_appear(op2)
-            time.sleep(0.5)
-            contents = open(op2, encoding="utf-8").read()
-            self.assertEqual(contents, "Hello")
+            self.wait_for_file_contents_to_contain(op2, "Hello")
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
@@ -188,7 +186,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             rc = 404
             while rc != 200 and time.time() - start < 60:
                 rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
-                time.sleep(5)
+                time.sleep(.2)
 
             self.assertEqual(rc, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
@@ -229,7 +227,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             rc = 404
             while rc != 200 and time.time() - start < 60:
                 rc = requests.get(self.svn_repo + self.rel_dir_1 + "control", auth=(self.user, self.passwd), verify=False).status_code
-                time.sleep(5)
+                time.sleep(.2)
 
             self.assertEqual(rc, 200, "URL " + self.svn_repo + self.rel_dir_1 + "control" + " should have been PUT, but it was not")
             self.assertNotEqual(requests.get(self.svn_repo + self.rel_dir_1 + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
@@ -262,7 +260,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             while True:
                 if self.path_exists_on_svn_server("aaa") and self.path_exists_on_svn_server("aaa/test.txt"):
                     break
-                if time.time() - start > 90:
+                if time.time() - start > 15:
                     self.fail("dir aaa and file aaa/test.txt should be up on " + self.svn_repo + self.rel_dir_1 + " within 90 seconds")
                 time.sleep(1.5)
 
@@ -299,17 +297,6 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         try:
             self.wait_for_file_to_appear(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt")
 
-            time.sleep(5)
-            # print "rmv"
-            # os.remove(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt")
-            # time.sleep(5)
-            # print "wait"
-            #
-            # self.wait_for_file_to_disappear(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt")
-            #
-            # self.assertEquals(
-            #     requests.get(self.svn_repo + self.rel_dir_1 + "output.txt", auth=(self.user, self.passwd), verify=False).status_code, 404)
-            #
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -392,7 +379,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             self.wait_for_file_to_appear(op1)
 
             op1 = IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt"
-            time.sleep(5) # the two files should arrive pretty much at the same time, but why not wait 5 secs, heh?
+            time.sleep(2) # the two files should arrive pretty much at the same time, but why not wait 2 secs, heh?
             if os.path.exists(op1):
                 self.fail("File " + op1 + " should not have appeared but did.")
         finally:
@@ -442,7 +429,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             p1 = self.start_subsyncit(self.svn_repo + "integrationTests/", IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            time.sleep(10)
+            time.sleep(2)
 
             self.wait_for_file_contents_to_contain(IntegrationTestsOfSyncOperations.testSyncDir1 + "output.txt", "Hello changed on server")
             clash_file = glob2.glob(IntegrationTestsOfSyncOperations.testSyncDir1 + "*.clash_*")[0]
@@ -504,7 +491,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             self.wait_for_URL_to_appear(self.svn_repo + self.rel_dir_1 + "output.zzz")
 
-            time.sleep(5) # the all files should arrive pretty much at the same time, but why not wait 5 secs, heh?
+            time.sleep(2) # the all files should arrive pretty much at the same time, but why not wait 5 secs, heh?
 
             self.assertEqual(
                 requests.get(self.svn_repo + self.rel_dir_1 + "output.txt",
@@ -567,7 +554,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
             print("Killed after secs: " + str(round(time.time() - start, 1)))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
-            time.sleep(5)
+            time.sleep(2)
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
             print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite")

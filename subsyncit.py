@@ -29,7 +29,7 @@
 # `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
 #
 # Note: There's a database created in the Local Sync Directory called ".subsyncit.db".
-# It contains one row per file that's synced back and forth. There's a field in there repoRev
+# It contains one row per file that's synced back and forth. There's a field in there RV
 # which is not currently used, but set to 0
 
 import argparse
@@ -54,6 +54,11 @@ from tinydb.middlewares import CachingMiddleware
 from tinydb import Query, TinyDB
 from watchdog.events import PatternMatchingEventHandler
 
+PUT_ON_SERVER = "PT"
+GET_FROM_SERVER = "GT"
+DELETE_ON_SERVER = "DS"
+DELETE_LOCALLY = "DL"
+MAKE_DIR_ON_SERVER = "MK"
 
 PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
              '<D:propfind xmlns:D="DAV:">\n' \
@@ -302,6 +307,12 @@ class MyTinyDBTrace():
                 debug("TinyDB: [" + result + "] all " + english_duration(durn))
 
 
+class UnexpectedStatusCode(Exception):
+
+    def __init__(self, status_code):
+        self.message = " status code:" +  str(status_code)
+
+
 class NotPUTting(Exception):
     pass
 
@@ -411,39 +422,39 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, remo
     dirs_made = 0
     if dname == "":
         return 0
-    dir = files_table.get(Query().relativeFileName == dname)
+    dir = files_table.get(Query().RFN == dname)
 
-    if not dir or dir['repoRev'] == 0:
+    if not dir or dir['RV'] == 0:
         parentname = dirname(dname)
         if parentname != "":
-            parent = files_table.get(Query().relativeFileName == parentname)
-            if not parent or parent['repoRev'] == 0:
+            parent = files_table.get(Query().RFN == parentname)
+            if not parent or parent['RV'] == 0:
                 dirs_made += make_directories_if_missing_in_db(files_table, parentname, requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_path)
 
     if not dir:
         make_directories_if_missing_in_db(files_table, dirname(dname), requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_path)
         dirs_made += 1
-        dir = {'relativeFileName': dname,
-               'isFile': "0",
-               'remoteSha1': None,
-               'localSha1': None,
-               'sz_ts': 0,
-               'instruction': None,
-               'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_path)
+        dir = {'RFN': dname,
+               'F': "0",
+               'RS': None,
+               'LS': None,
+               'ST': 0,
+               'I': None,
+               'RV': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_path)
                }
         files_table.insert(dir)
-    elif dir['repoRev'] == 0:
+    elif dir['RV'] == 0:
         dirs_made += 1
         files_table.update(
             {
-                'instruction': None,
-                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_path)
+                'I': None,
+                'RV': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_path)
             },
-            Query().relativeFileName == dname)
+            Query().RFN == dname)
     return dirs_made
 
 
-def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_directory, absolute_local_root_path, files_table, alleged_remoteSha1, baseline_relative_path, repo_parent_path):
+def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_directory, absolute_local_root_path, files_table, alleged_remote_sha1, baseline_relative_path, repo_parent_path):
     dirs_made = 0
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(0.1)
@@ -454,9 +465,9 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
     dirs_made += make_directories_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_path)
 
-    if alleged_remoteSha1:
+    if alleged_remote_sha1:
         (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path)
-        if actual_remote_sha1 and actual_remote_sha1 != alleged_remoteSha1:
+        if actual_remote_sha1 and actual_remote_sha1 != alleged_remote_sha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser() # force into clash scenario later
 
     # TODO has it changed on server
@@ -475,13 +486,13 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     start = time.time()
     unprocessed_files = {}
 
-    rows = files_table.search(Query().instruction == None)
+    rows = files_table.search(Query().I == None)
     for row in rows:
-        relative_file_name = row['relativeFileName']
+        relative_file_name = row['RFN']
         if not should_be_excluded(relative_file_name, excluded_filename_patterns):
             unprocessed_files[relative_file_name] = {
-                "instruction" : row["instruction"],
-                "remoteSha1" : row['remoteSha1']
+                "I" : row["I"],
+                "RS" : row['RS']
             }
 
     my_trace(2,  " done populating initial unprocessed files" )
@@ -496,22 +507,22 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
                 match = unprocessed_files[relative_file_name]
                 unprocessed_files.pop(relative_file_name)
         if match:
-            if match["instruction"] != None:
+            if match["I"] != None:
                 continue
-            if not match['remoteSha1'] == sha1:
+            if not match['RS'] == sha1:
                 get_count += 1
-                update_instruction_in_table(files_table, "GET", relative_file_name)
+                update_instruction_in_table(files_table, GET_FROM_SERVER, relative_file_name)
         else:
             get_count += 1
             dir_or_file = "dir" if sha1 is None else "file"
-            upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction="GET")
+            upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction=GET_FROM_SERVER)
 
     my_trace(2,  " done iterating over files_on_svn_server")
 
     # files still in the unprocessed_files list are not up on Subversion
     for relative_file_name, val in unprocessed_files.items():
         local_deletes += 1
-        update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
+        update_instruction_in_table(files_table, 'DL', relative_file_name)
 
     section_end(get_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
           + " local deletes (comparison of all the files on the Subversion server to files in the sync dir) took %s.", start)
@@ -551,7 +562,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
                                data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
 
     if options.status_code != 200:
-        return -998
+        raise UnexpectedStatusCode(options.status_code)
 
     youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
@@ -565,7 +576,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
     content = report.content.decode("utf-8")
 
     if report.status_code != 200:
-        return -999
+        raise UnexpectedStatusCode(options.status_code)
 
     return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
 
@@ -585,14 +596,14 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         file_count = 0
 
         try:
-            rows = files_table.search(Query().instruction == "GET")
+            rows = files_table.search(Query().I == GET_FROM_SERVER)
             num_rows = len(rows)
             if len(rows) > 3:
                 my_trace(2,  ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
             for row in rows:
-                relative_file_name = row['relativeFileName']
-                is_file = row['isFile'] == "1"
-                old_sha1_should_be = row['localSha1']
+                relative_file_name = row['RFN']
+                is_file = row['F'] == "1"
+                old_sha1_should_be = row['LS']
                 abs_local_file_path = (absolute_local_root_path + relative_file_name)
                 head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
 
@@ -601,18 +612,18 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     if not os.path.exists(abs_local_file_path):
                         os.makedirs(abs_local_file_path)
                     # TODO
-                    # if row['repoRev'] != 0:
+                    # if row['RV'] != 0:
                     #     print ("Dir GET needlessly: " + relative_file_name)
                     # print("rr=" + str(rr))
                     files_table.update({
-                        'repoRev': get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path),
-                        'remoteSha1': None,
-                        'localSha1': None,
-                        'sz_ts': 0},
-                        Query().relativeFileName == relative_file_name)
+                        'RV': get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path),
+                        'RS': None,
+                        'LS': None,
+                        'ST': 0},
+                        Query().RFN == relative_file_name)
 
                 else:
-                    (repoRev, sha1, baseline_relative_path_not_used) \
+                    (RV, sha1, baseline_relative_path_not_used) \
                         = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
 
                     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
@@ -636,7 +647,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     osstat = os.stat(abs_local_file_path)
                     size_ts = osstat.st_size + osstat.st_mtime
                     update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
-                    update_row_revision(files_table, relative_file_name, repoRev)
+                    update_row_revision(files_table, relative_file_name, RV)
                 update_instruction_in_table(files_table, None, relative_file_name)
         finally:
 
@@ -653,17 +664,17 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
     start = time.time()
 
-    rows = files_table.search(Query().instruction == 'DELETE LOCALLY')
+    rows = files_table.search(Query().I == 'DL')
 
     deletes = 0
     try:
         for row in rows:
-            relative_file_name = row['relativeFileName']
+            relative_file_name = row['RFN']
             name = (absolute_local_root_path + relative_file_name)
             try:
                 os.remove(name)
                 deletes += 1
-                files_table.remove(Query().relativeFileName == relative_file_name)
+                files_table.remove(Query().RFN == relative_file_name)
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
@@ -673,27 +684,27 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
     my_trace(2,  " ---> perform_local_deletes_per_instructions - end")
 
 def update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts):
-    foo = files_table.update({'remoteSha1': sha1, 'localSha1': sha1, 'sz_ts': size_ts}, Query().relativeFileName == relative_file_name)
+    foo = files_table.update({'RS': sha1, 'LS': sha1, 'ST': size_ts}, Query().RFN == relative_file_name)
 
 def prt_files_table_for(files_table, relative_file_name):
-    return str(files_table.search(Query().relativeFileName == relative_file_name))
+    return str(files_table.search(Query().RFN == relative_file_name))
 
 
-def update_row_revision(files_table, relative_file_name, rev=-1):
-    files_table.update({'repoRev': 0}, Query().relativeFileName == relative_file_name)
+def update_row_revision(files_table, relative_file_name, rev=0):
+    files_table.update({'RV': 0}, Query().RFN == relative_file_name)
 
 
 def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
 
     # print "upsert1" + prt_files_table_for(files_table, relative_file_name)
-    if not files_table.contains(Query().relativeFileName == relative_file_name):
-        files_table.insert({'relativeFileName': relative_file_name,
-                            'isFile': "1" if file_or_dir == "file" else "0",
-                            'remoteSha1': None,
-                            'localSha1': None,
-                            'sz_ts': 0,
-                            'instruction': instruction,
-                            'repoRev': rev})
+    if not files_table.contains(Query().RFN == relative_file_name):
+        files_table.insert({'RFN': relative_file_name,
+                            'F': "1" if file_or_dir == "file" else "0",
+                            'RS': None,
+                            'LS': None,
+                            'ST': 0,
+                            'I': instruction,
+                            'RV': rev})
         return
 
     if instruction is not None:
@@ -701,15 +712,15 @@ def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instr
 
 
 def update_instruction_in_table(files_table, instruction, relative_file_name):
-    if instruction is not None and instruction == "DELETE":
+    if instruction is not None and instruction == DELETE_ON_SERVER:
 
-        files_table.update({'instruction': instruction}, Query().relativeFileName == relative_file_name)
+        files_table.update({'I': instruction}, Query().RFN == relative_file_name)
 
         # TODO LIKE
 
     else:
 
-        files_table.update({'instruction': instruction}, Query().relativeFileName == relative_file_name)
+        files_table.update({'I': instruction}, Query().RFN == relative_file_name)
 
 
 def get_relative_file_name(full_path, absolute_local_root_path):
@@ -723,20 +734,18 @@ def get_relative_file_name(full_path, absolute_local_root_path):
 
 def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path):
 
-    start = time.time()
-
     propfind = requests_session.propfind(url, headers={'Depth': 'infinity'})
 
     output = propfind.content.decode('utf-8')
 
     if "PROPFIND requests with a Depth of \"infinity\"" in output:
         print("'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
-              "the server (in httpd.conf propbably). Refer to " \
+              "the server (in httpd.conf probably). Refer to " \
               "https://github.com/paul-hammant/subsyncit/blob/master/SERVER-SETUP.md. " \
               "Subsyncit is refusing to run.")
         exit(1)
 
-    entries = []; path = ""; rev = -1; sha1 = None
+    entries = []; path = ""; rev = 0; sha1 = None
 
     for line in output.splitlines():
         if ":baseline-relative-path>" in line:
@@ -748,7 +757,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
         if "</D:response>" in line:
             if path != "":
                 entries.append ((path, rev, sha1))
-            path = ""; rev = -1; sha1 = None
+            path = ""; rev = 0; sha1 = None
 
     return entries
 
@@ -784,20 +793,20 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
         dirs_made = 0
         not_actually_changed = 0
         try:
-            rows = files_table.search(Query().instruction == "PUT")
+            rows = files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
             if len(rows) > 0:
                 my_trace(2,  ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
             for row in rows:
-                rel_file_name = row['relativeFileName']
+                rel_file_name = row['RFN']
                 try:
                     abs_local_file_path = (absolute_local_root_path + rel_file_name)
                     new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
                     output = ""
                     # print("-new_local_sha1=" + new_local_sha1)
-                    # print("-row['remoteSha1']=" + str(row['remoteSha1']))
-                    # print("-row['localSha1']=" + str(row['localSha1']))
-                    if new_local_sha1 == 'FILE_MISSING' or (row['remoteSha1'] == row['localSha1'] and row['localSha1'] == new_local_sha1):
+                    # print("-row['RS']=" + str(row['RS']))
+                    # print("-row['LS']=" + str(row['LS']))
+                    if new_local_sha1 == 'FILE_MISSING' or (row['RS'] == row['LS'] and row['LS'] == new_local_sha1):
                         pass
                         # files that come down as new/changed, get written to the FS trigger a file added/changed message,
                         # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
@@ -807,7 +816,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                         update_instruction_in_table(files_table, None, rel_file_name)
                     else:
                         dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_directory, absolute_local_root_path, files_table,
-                                                                         row['remoteSha1'], baseline_relative_path, repo_parent_path)  # <h1>Created</h1>
+                                                                         row['RS'], baseline_relative_path, repo_parent_path)  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
@@ -866,23 +875,23 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
         if local_sha1 != remote_sha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser()
         files_table.update({
-            'repoRev': remote_rev_num,
-            'remoteSha1': remote_sha1,
-            'localSha1': remote_sha1,
-            'sz_ts': size_ts
-        }, Query().relativeFileName == relative_file_name)
+            'RV': remote_rev_num,
+            'RS': remote_sha1,
+            'LS': remote_sha1,
+            'ST': size_ts
+        }, Query().RFN == relative_file_name)
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_directory, absolute_local_root_path):
 
     my_trace(2,  " ---> update_revisions_for_created_directories - start")
 
-    rows = files_table.search(Query().instruction == 'MKCOL')
+    rows = files_table.search(Query().I == MAKE_DIR_ON_SERVER)
 
     start = time.time()
 
     for row in rows:
-        relative_file_name = row['relativeFileName']
-        if row['remoteSha1'] :
+        relative_file_name = row['RFN']
+        if row['RS'] :
             update_instruction_in_table(files_table, None, relative_file_name)
         (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
         update_row_revision(files_table, relative_file_name, rev=revn)
@@ -899,25 +908,25 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
 
     start = time.time()
 
-    rows = files_table.search(Query().instruction == 'DELETE ON REMOTE')
+    rows = files_table.search(Query().I == DELETE_ON_SERVER)
 
     files_deleted = 0
     directories_deleted = 0
     for row in rows:
-        rfn = row['relativeFileName']
+        rfn = row['RFN']
         requests_delete = requests_session.delete(remote_subversion_directory + esc(rfn).replace(os.sep, "/"))
         output = requests_delete.content.decode('utf-8')
-        # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
-        if row['isFile'] == 1:  # isFile
+        # debug(row['RFN'] + ": DELETE " + str(requests_delete.status_code))
+        if row['F'] == 1:  # F
             files_deleted += 1
-            files_table.remove(Query().relativeFileName == row['relativeFileName'])
+            files_table.remove(Query().RFN == row['RFN'])
         else:
             directories_deleted += 1
-            files_table.remove(Query().relativeFileName == row['relativeFileName'])
+            files_table.remove(Query().RFN == row['RFN'])
             # TODO LIKE
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
-            print(("Unexpected on_deleted output for " + row['relativeFileName'] + " = [" + str(output) + "]"))
+            print(("Unexpected on_deleted output for " + row['RFN'] + " = [" + str(output) + "]"))
 
     speed = "."
     if len(rows) > 0:
@@ -930,7 +939,7 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
     my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - end")
 
 def get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there = False):
-    ver = -1
+    ver = 0
     sha1 = None
     baseline_relative_path = ""
     content = ""
@@ -958,7 +967,7 @@ def get_remote_subversion_server_revision_for(requests_session, remote_subversio
                 propfind.status_code)
         else:
             content = "PROPFIND sstatus: " + str(propfind.status_code) + " for: " + url
-        if must_be_there and ver == -1:
+        if must_be_there and ver == 0:
             write_error(absolute_local_root_path, content)
     except requests.exceptions.ConnectionError as e:
         write_error(absolute_local_root_path, "Could be offline? " + repr(e))
@@ -998,21 +1007,21 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
     while len(local_adds_chgs_deletes_queue) > 0:
         (relative_file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
-            upsert_row_in_table(files_table, relative_file_name, "-1", "dir", instruction="MKCOL")
+            upsert_row_in_table(files_table, relative_file_name, 0, "dir", instruction=MAKE_DIR_ON_SERVER)
         elif action == "add_file":
             in_subversion = file_is_in_subversion(files_table, relative_file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
                 # print("File to add: " + relative_file_name + " is not in subversion")
-                upsert_row_in_table(files_table, relative_file_name, "-1", "file", instruction="PUT")
+                upsert_row_in_table(files_table, relative_file_name, 0, "file", instruction=PUT_ON_SERVER)
         elif action == "change":
             # print("File changed: " + relative_file_name + " is not in subversion")
-            update_instruction_in_table(files_table, "PUT", relative_file_name)
+            update_instruction_in_table(files_table, PUT_ON_SERVER, relative_file_name)
         elif action == "delete":
             in_subversion = file_is_in_subversion(files_table, relative_file_name)
             # 'svn up' can delete a file, causing watchdog to trigger a delete notification .. to be ignored
             if in_subversion:
-                update_instruction_in_table(files_table, "DELETE ON REMOTE", relative_file_name)
+                update_instruction_in_table(files_table, DELETE_ON_SERVER, relative_file_name)
         else:
             raise Exception("Unknown action " + action)
 
@@ -1022,18 +1031,18 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
 
 
 def file_is_in_subversion(files_table, relative_file_name):
-    row = files_table.get(Query().relativeFileName == relative_file_name)
-    return False if not row else row['remoteSha1'] != None
+    row = files_table.get(Query().RFN == relative_file_name)
+    return False if not row else row['RS'] != None
 
 
 def print_rows(files_table):
-    files_table_all = sorted(files_table.all(), key=lambda k: k['relativeFileName'])
+    files_table_all = sorted(files_table.all(), key=lambda k: k['RFN'])
     if len(files_table_all) > 0:
         print("All Items, as per 'files' table:")
-        print("  relativeFileName, 0=dir or 1=file, rev, remote sha1, local sha1, size + timestamp, instruction")
+        print("  RFN, 0=dir or 1=file, rev, remote sha1, local sha1, size + timestamp, instruction")
         for row in files_table_all:
-            print(("  " + row['relativeFileName'] + ", " + str(row['isFile']) + ", " + str(row['repoRev']) + ", " +
-                  str(row['remoteSha1']) + ", " + str(row['localSha1']) + ", " + str(row['sz_ts']) + ", " + str(row['instruction'])))
+            print(("  " + row['RFN'] + ", " + str(row['F']) + ", " + str(row['RV']) + ", " +
+                  str(row['RS']) + ", " + str(row['LS']) + ", " + str(row['ST']) + ", " + str(row['I'])))
 
 
 def scantree(path):
@@ -1066,9 +1075,9 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
         if should_be_excluded(relative_file_name, excluded_filename_patterns):
             continue
 
-        row = files_table.get(Query().relativeFileName == relative_file_name)
-        in_subversion = row and row['remoteSha1'] != None
-        if row and row['instruction'] != None: # or row['isFile'] == "1")
+        row = files_table.get(Query().RFN == relative_file_name)
+        in_subversion = row and row['RS'] != None
+        if row and row['I'] != None: # or row['F'] == "1")
             continue
         if not in_subversion:
             add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
@@ -1077,7 +1086,7 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
                 to_add += 1
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
-            if size_ts != row["sz_ts"]:
+            if size_ts != row["ST"]:
                 # This is speculative, logic further on will not PUT the file up if the SHA
                 # is unchanged, but file_size + time_stamp change is approximate but far quicker
                 add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
@@ -1101,13 +1110,13 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
     to_delete = 0
 
     file = Query()
-    for row in files_table.search((file.instruction == None) & (file.remoteSha1 != None)):
+    for row in files_table.search((file.I == None) & (file.RS != None)):
         if True in is_shutting_down:
             break
         if to_delete > 100:
             break
 
-        relative_file_name = row['relativeFileName']
+        relative_file_name = row['RFN']
         relative_file_name = relative_file_name
         if not os.path.exists(absolute_local_root_path + relative_file_name):
             to_delete += 1
@@ -1245,7 +1254,7 @@ def main(argv):
 
     local_adds_chgs_deletes_queue = IndexedSet()
 
-    last_root_revision = -1
+    last_root_revision = None
     repo_parent_path = ""
     is_shutting_down = []
 
@@ -1278,7 +1287,7 @@ def main(argv):
                 repo_parent_path = get_repo_parent_path(requests_session, args.remote_subversion_directory)
 
             to_add_chg_or_del = 0
-            if root_revision_on_remote_svn_repo != -1:
+            if root_revision_on_remote_svn_repo != None:
                 if iteration == 0: # At boot time only for now
                     excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_directory)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)

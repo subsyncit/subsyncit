@@ -40,12 +40,10 @@ import getpass
 import hashlib
 import os
 import re
-import shutil
 import sys
 import time
 from os.path import dirname, splitext
 from time import strftime
-from threading import Thread, Lock
 
 import requests
 import requests.packages.urllib3
@@ -108,84 +106,108 @@ class MyRequestsTracer():
 
     def mkcol(self, arg0):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.request("MKCOL", arg0)
+            request = self.delegate.request("MKCOL", arg0)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: MKCOL " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " MKCOL " + str(arg0) + " " + english_duration(durn))
 
 
     def delete(self, arg0):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.delete(arg0)
+            request = self.delegate.delete(arg0)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: DELETE " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " DELETE " + str(arg0) + " " + english_duration(durn))
 
 
     def head(self, arg0):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.head(arg0)
+            request = self.delegate.head(arg0)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 0.5 or self.always_print:
-                debug("Requests: HEAD " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " HEAD " + str(arg0) + " " + english_duration(durn))
 
 
     def propfind(self, arg0, headers=None):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.request("PROPFIND", arg0, data=PROPFIND, headers=headers)
+            request = self.delegate.request("PROPFIND", arg0, data=PROPFIND, headers=headers)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
 
 
     def put(self, arg0, data=None):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.put(arg0, data=data)
+            request = self.delegate.put(arg0, data=data)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
     def data_print(self, data):
         return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
 
     def get(self, arg0, stream=None):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.get(arg0, stream=stream)
+            request = self.delegate.get(arg0, stream=stream)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
 
 
     def options(self, arg0, data=None):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.request('OPTIONS', arg0, data=data)
+            request = self.delegate.request('OPTIONS', arg0, data=data)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: " + str(status) + " OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
     def report(self, arg0, data=None):
         start = time.time()
+        status = 0
         try:
-            return self.delegate.request('REPORT', arg0, data=data)
+            request = self.delegate.request('REPORT', arg0, data=data)
+            status = request.status_code
+            return request
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: REPORT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] REPORT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
 class MyTinyDBTrace():
@@ -196,66 +218,87 @@ class MyTinyDBTrace():
 
     def search(self, arg0):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.search(arg0)
+            search = self.delegate.search(arg0)
+            result = "✘" if not search else "rows=" + str(len(search))
+            return search
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: search " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] search " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.get(arg0)
+            get = self.delegate.get(arg0)
+            result = "✘" if not get else "✔"
+            return get
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB op >1s: get " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] get " + str(arg0) + " " + english_duration(durn))
 
     def remove(self, arg0):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.remove(arg0)
+            remove = self.delegate.remove(arg0)
+            result = "✘" if not remove else "✔"
+            return remove
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: remove " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] remove " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.update(arg0, arg1)
+            update = self.delegate.update(arg0, arg1)
+            result = "✘" if not update else "✔"
+            return update
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.insert(arg0)
+            insert = self.delegate.insert(arg0)
+            result = "✘" if not insert else "✔"
+            return insert
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: insert " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] insert " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.contains(arg0)
+            contains = self.delegate.contains(arg0)
+            result = "✘" if not contains else "✔"
+            return contains
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: contains " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] contains " + str(arg0) + " " + english_duration(durn))
 
     def all(self):
         start = time.time()
+        result = ""
         try:
-            return self.delegate.all()
+            all = self.delegate.all()
+            result = "✘" if not all else "rows=" + str(len(all))
+            return all
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: all " + english_duration(durn))
+                debug("TinyDB: [" + result + "] all " + english_duration(durn))
 
 
 class NotPUTting(Exception):
@@ -476,8 +519,10 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
 
 
 def english_duration(duration):
+    if duration < .001:
+        return str(round(duration*1000000)) + " ns"
     if duration < 1:
-        return str(round(duration*1000)) + " ms"
+        return str(round(duration*1000, 1)) + " ms"
     if duration < 90:
         return str(round(duration, 2)) + " secs"
     if duration < 5400:

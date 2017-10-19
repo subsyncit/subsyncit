@@ -102,7 +102,7 @@ class MyRequestsTracer():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = False
+        self.always_print = True
 
     def mkcol(self, arg0):
         start = time.time()
@@ -214,7 +214,7 @@ class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = False
+        self.always_print = True
 
     def search(self, arg0):
         start = time.time()
@@ -231,6 +231,7 @@ class MyTinyDBTrace():
     def get(self, arg0):
         start = time.time()
         result = ""
+        get = None
         try:
             get = self.delegate.get(arg0)
             result = "✘" if not get else "✔"
@@ -238,7 +239,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] get " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB: [" + result + "] get " + str(arg0) + " " + english_duration(durn) + " " + str(get))
 
     def remove(self, arg0):
         start = time.time()

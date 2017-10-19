@@ -100,10 +100,99 @@ def calculate_sha1_from_local_file(file):
     return hexdigest
 
 
+class MyRequestsTracer():
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+        self.always_print = False
+
+    def mkcol(self, arg0):
+        start = time.time()
+        try:
+            return self.delegate.request("MKCOL", arg0)
+        finally:
+            durn = time.time() - start
+            if durn > 1 or self.always_print:
+                debug("Requests: MKCOL " + str(arg0) + " " + english_duration(durn))
+
+
+    def delete(self, arg0):
+        start = time.time()
+        try:
+            return self.delegate.delete(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > 1 or self.always_print:
+                debug("Requests: DELETE " + str(arg0) + " " + english_duration(durn))
+
+
+    def head(self, arg0):
+        start = time.time()
+        try:
+            return self.delegate.head(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > 0.5 or self.always_print:
+                debug("Requests: HEAD " + str(arg0) + " " + english_duration(durn))
+
+
+    def propfind(self, arg0, headers=None):
+        start = time.time()
+        try:
+            return self.delegate.request("PROPFIND", arg0, data=PROPFIND, headers=headers)
+        finally:
+            durn = time.time() - start
+            if durn > 1 or self.always_print:
+                debug("Requests: PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
+
+
+    def put(self, arg0, data=None):
+        start = time.time()
+        try:
+            return self.delegate.put(arg0, data=data)
+        finally:
+            durn = time.time() - start
+            if durn > 1 or self.always_print:
+                debug("Requests: PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+
+    def data_print(self, data):
+        return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
+
+    def get(self, arg0, stream=None):
+        start = time.time()
+        try:
+            return self.delegate.get(arg0, stream=stream)
+        finally:
+            durn = time.time() - start
+            if durn > 1 or self.always_print:
+                debug("Requests: GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+
+
+    def options(self, arg0, data=None):
+        start = time.time()
+        try:
+            return self.delegate.request('OPTIONS', arg0, data=data)
+        finally:
+            durn = time.time() - start
+            if durn > .5 or self.always_print:
+                debug("Requests: OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+
+
+    def report(self, arg0, data=None):
+        start = time.time()
+        try:
+            return self.delegate.request('REPORT', arg0, data=data)
+        finally:
+            durn = time.time() - start
+            if durn > .5 or self.always_print:
+                debug("Requests: REPORT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+
+
 class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
+        self.always_print = False
 
     def search(self, arg0):
         start = time.time()
@@ -111,8 +200,8 @@ class MyTinyDBTrace():
             return self.delegate.search(arg0)
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: search " + str(arg0) + " " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: search " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
         start = time.time()
@@ -120,7 +209,7 @@ class MyTinyDBTrace():
             return self.delegate.get(arg0)
         finally:
             durn = time.time() - start
-            if durn > .01:
+            if durn > .01 or self.always_print:
                 debug("TinyDB op >1s: get " + str(arg0) + " " + english_duration(durn))
 
     def remove(self, arg0):
@@ -129,8 +218,8 @@ class MyTinyDBTrace():
             return self.delegate.remove(arg0)
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: remove " + str(arg0) + " " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: remove " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
         start = time.time()
@@ -138,8 +227,8 @@ class MyTinyDBTrace():
             return self.delegate.update(arg0, arg1)
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
         start = time.time()
@@ -147,8 +236,8 @@ class MyTinyDBTrace():
             return self.delegate.insert(arg0)
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: insert " + str(arg0) + " " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: insert " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
         start = time.time()
@@ -156,8 +245,8 @@ class MyTinyDBTrace():
             return self.delegate.contains(arg0)
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: contains " + str(arg0) + " " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: contains " + str(arg0) + " " + english_duration(durn))
 
     def all(self):
         start = time.time()
@@ -165,8 +254,8 @@ class MyTinyDBTrace():
             return self.delegate.all()
         finally:
             durn = time.time() - start
-            if durn > .01:
-                debug("TinyDB op >.01s: all " + english_duration(durn))
+            if durn > .01 or self.always_print:
+                debug("TinyDB: all " + english_duration(durn))
 
 
 class NotPUTting(Exception):
@@ -262,7 +351,7 @@ def get_suffix(relative_file_name):
 
 
 def make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_directory, baseline_relative_path, repo_parent_path):
-    request = requests_session.request('MKCOL', remote_subversion_directory + dir.replace(os.sep, "/"))
+    request = requests_session.mkcol(remote_subversion_directory + dir.replace(os.sep, "/"))
     rc = request.status_code
     if rc == 201:
         return get_revision_for_remote_directory(requests_session, remote_subversion_directory, dir.replace(os.sep, "/"), baseline_relative_path, repo_parent_path)
@@ -274,6 +363,7 @@ def esc(name):
 
 
 def make_directories_if_missing_in_db(files_table, dname, requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_path):
+
     dirs_made = 0
     if dname == "":
         return 0
@@ -411,7 +501,7 @@ def extract_name_type_rev(entry_xml_element):
 
 def get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path):
 
-    options = requests_session.request('OPTIONS', remote_subversion_directory + esc(relative_file_name),
+    options = requests_session.options(remote_subversion_directory + esc(relative_file_name),
                                data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
 
     if options.status_code != 200:
@@ -421,7 +511,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
 
     path = "!svn/rvr/" + youngest_rev + "/" + baseline_relative_path
     url = remote_subversion_directory.replace(repo_parent_path + baseline_relative_path, repo_parent_path + path, 1)
-    report = requests_session.request('REPORT', url + "/" + esc(relative_file_name),
+    report = requests_session.report(url + "/" + esc(relative_file_name),
                               data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
                                    '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:author</S:revprop><S'
                                    ':revprop>svn:date</S:revprop><S:revprop>svn:log</S:revprop><S:path></S:path><S:encode-binary-props/></S:log-report>')
@@ -589,7 +679,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     start = time.time()
 
-    propfind = requests_session.request('PROPFIND', url, data=PROPFIND, headers={'Depth': 'infinity'})
+    propfind = requests_session.propfind(url, headers={'Depth': 'infinity'})
 
     output = propfind.content.decode('utf-8')
 
@@ -614,7 +704,6 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
                 entries.append ((path, rev, sha1))
             path = ""; rev = -1; sha1 = None
 
-    section_end(True,  "PROFIND (" + url + " - infinity) on Subversion server took %s, for " + str(len(entries)) + " entries.", start)
     return entries
 
 def extract_path_from_baseline_rel_path(baseline_relative_path, line):
@@ -803,7 +892,7 @@ def get_remote_subversion_server_revision_for(requests_session, remote_subversio
         url = remote_subversion_directory + esc(relative_file_name).replace("\\", "/")
         if url.endswith("/"):
             url = url[:-1]
-        propfind = requests_session.request('PROPFIND', url, data=PROPFIND, headers={'Depth': '0'})
+        propfind = requests_session.propfind(url, headers={'Depth': '0'})
         if 200 <= propfind.status_code <= 299:
             content = propfind.content.decode('utf-8')
 
@@ -835,8 +924,9 @@ def get_repo_parent_path(requests_session, remote_subversion_directory):
     if url.endswith("/"):
         url = url[:-1]
 
-    opts = requests_session.request('OPTIONS', url,
-                                    data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>').content.decode("utf-8")
+    opts = requests_session.options(url, data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')\
+        .content.decode("utf-8")
+
     return str([line for line in opts.splitlines() if ':activity-collection-set>' in line]).split(">")[2].split("!svn")[0]
 
 def write_error(absolute_local_root_path, msg):
@@ -1025,7 +1115,7 @@ def make_requests_session(auth, verifySetting):
     http_adapter = HTTPAdapter(pool_connections=1, max_retries=0)
     requests_session.mount('http://', http_adapter)
     requests_session.mount('https://', http_adapter)
-    return requests_session
+    return MyRequestsTracer(requests_session)
 
 
 def make_hidden_on_windows_too(path):
@@ -1095,7 +1185,6 @@ def main(argv):
 
     if not os.path.exists(db_dir):
         os.mkdir(db_dir)
-
 
     db = TinyDB(db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
     files_table  = MyTinyDBTrace(db.table('files'))

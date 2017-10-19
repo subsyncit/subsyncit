@@ -548,11 +548,13 @@ padding: 40px 15px;
 
  .contact_us {
     background-image: url('/images/contact_us.png');
+	background-repeat: no-repeat
 }
 
  @media (max-width: 767px) {
     .contact_us {
         background-image: url('/images/contact_us_up.png');
+		background-repeat: no-repeat
     }
 }
 

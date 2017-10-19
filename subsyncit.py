@@ -119,7 +119,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: [" + str(status) + "] MKCOL " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.MKCOL: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def delete(self, arg0):
@@ -132,7 +132,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: [" + str(status) + "] DELETE " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.DELETE: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def head(self, arg0):
@@ -145,7 +145,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 0.5 or self.always_print:
-                debug("Requests: [" + str(status) + "] HEAD " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.HEAD: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def propfind(self, arg0, headers=None):
@@ -158,7 +158,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: [" + str(status) + "] PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
+                debug("Requests.PROPFIND: [" + str(status) + "] " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
 
 
     def put(self, arg0, data=None):
@@ -171,7 +171,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: [" + str(status) + "] PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests.PUT: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
     def data_print(self, data):
         return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
@@ -186,7 +186,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: [" + str(status) + "] GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+                debug("Requests.GET: [" + str(status) + "] " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
 
 
     def options(self, arg0, data=None):
@@ -199,7 +199,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: [" + str(status) + "] OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests.OPTIONS: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
     def report(self, arg0, youngest_rev):
@@ -214,7 +214,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: [" + str(status) + "] REPORT " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
+                debug("Requests.REPORT: [" + str(status) + "] " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
 
 
 class MyTinyDBTrace():
@@ -233,7 +233,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] search " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB.search: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
         start = time.time()
@@ -246,7 +246,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] get " + str(arg0) + " " + english_duration(durn) + " " + str(get))
+                debug("TinyDB.get: [" + result + "] " + str(arg0) + " " + english_duration(durn) + " " + str(get))
 
     def remove(self, arg0):
         start = time.time()
@@ -258,7 +258,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] remove " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDBremove: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
         start = time.time()
@@ -270,7 +270,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
+                debug("TinyDB.update: [" + result + "] " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
         start = time.time()
@@ -282,7 +282,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] insert " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB.insert: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
         start = time.time()
@@ -294,7 +294,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] contains " + str(arg0) + " " + english_duration(durn))
+                debug("TinyDB.contains: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def all(self):
         start = time.time()
@@ -306,7 +306,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB: [" + result + "] all " + english_duration(durn))
+                debug("TinyDB.all: [" + result + "] " + english_duration(durn))
 
 
 class UnexpectedStatusCode(Exception):

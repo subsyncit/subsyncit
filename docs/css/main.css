@@ -554,7 +554,11 @@ padding: 40px 15px;
  @media (max-width: 991px) {
     .contact_us {
         background-image: url('/images/contact_us_up.png');
-		background-repeat: no-repeat
+		background-repeat: no-repeat;
+		margin-right: auto;
+    	margin-left: auto;
+		height: 284px;
+		width: 261px;
     }
 }
 

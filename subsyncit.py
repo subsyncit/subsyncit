@@ -119,7 +119,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: " + str(status) + " MKCOL " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] MKCOL " + str(arg0) + " " + english_duration(durn))
 
 
     def delete(self, arg0):
@@ -132,7 +132,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: " + str(status) + " DELETE " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] DELETE " + str(arg0) + " " + english_duration(durn))
 
 
     def head(self, arg0):
@@ -145,7 +145,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 0.5 or self.always_print:
-                debug("Requests: " + str(status) + " HEAD " + str(arg0) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] HEAD " + str(arg0) + " " + english_duration(durn))
 
 
     def propfind(self, arg0, headers=None):
@@ -158,7 +158,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: " + str(status) + " PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] PROPFIND " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
 
 
     def put(self, arg0, data=None):
@@ -171,7 +171,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: " + str(status) + " PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] PUT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
     def data_print(self, data):
         return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
@@ -186,7 +186,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests: " + str(status) + " GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] GET " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
 
 
     def options(self, arg0, data=None):
@@ -199,20 +199,22 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: " + str(status) + " OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] OPTIONS " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
-    def report(self, arg0, data=None):
+    def report(self, arg0, youngest_rev):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request('REPORT', arg0, data=data)
+            request = self.delegate.request('REPORT', arg0, data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
+                                   '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:author</S:revprop><S'
+                                   ':revprop>svn:date</S:revprop><S:revprop>svn:log</S:revprop><S:path></S:path><S:encode-binary-props/></S:log-report>')
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests: [" + str(status) + "] REPORT " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests: [" + str(status) + "] REPORT " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
 
 
 class MyTinyDBTrace():
@@ -568,10 +570,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
 
     path = "!svn/rvr/" + youngest_rev + "/" + baseline_relative_path
     url = remote_subversion_directory.replace(repo_parent_path + baseline_relative_path, repo_parent_path + path, 1)
-    report = requests_session.report(url + "/" + esc(relative_file_name),
-                              data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
-                                   '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:author</S:revprop><S'
-                                   ':revprop>svn:date</S:revprop><S:revprop>svn:log</S:revprop><S:path></S:path><S:encode-binary-props/></S:log-report>')
+    report = requests_session.report(url + "/" + esc(relative_file_name), youngest_rev)
 
     content = report.content.decode("utf-8")
 

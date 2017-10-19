@@ -545,6 +545,17 @@ line-height: 40px;
 padding: 40px 15px;
 }
 }
+
+ .contact_us {
+    background-image: url('/images/contact_us.png');
+}
+
+ @media (max-width: 767px) {
+    .contact_us {
+        background-image: url('/images/contact_us_up.png');
+    }
+}
+
  @media (max-width: 480px) {
 	 /*Media Queries for smaller devices*/
 	 .masthead {

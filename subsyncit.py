@@ -51,6 +51,8 @@ import requests
 import requests.packages.urllib3
 from boltons.setutils import IndexedSet
 from requests.adapters import HTTPAdapter
+from tinydb.storages import JSONStorage
+from tinydb.middlewares import CachingMiddleware
 from tinydb import Query, TinyDB
 from watchdog.events import PatternMatchingEventHandler
 
@@ -66,21 +68,21 @@ PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
 
 
 def debug(message):
-    print(message)
+    print(strftime('%Y-%m-%d %H:%M:%S') + ": " + message)
 
 
 def section_end(should_prnt, message, start):
     duration = time.time() - start
     if should_prnt or duration > 1:
-        debug(strftime('%Y-%m-%d %H:%M:%S') + ": " + message %english_duration(duration))
+        debug(("SECTION " + message) %english_duration(duration))
 
 
 def my_trace(lvl, message):
     # pass
     if lvl == 1:
-        debug(strftime('%Y-%m-%d %H:%M:%S') + message)
+        debug("TRACE " + message)
     # if lvl == 2:
-    #     debug(strftime('%Y-%m-%d %H:%M:%S') + message)
+    #     debug("TRACE " + message)
 
 
 def calculate_sha1_from_local_file(file):
@@ -98,39 +100,73 @@ def calculate_sha1_from_local_file(file):
     return hexdigest
 
 
-class MyTinyDBLock():
+class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.lock = Lock()
 
     def search(self, arg0):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.search(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: search " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.get(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >1s: get " + str(arg0) + " " + english_duration(durn))
 
     def remove(self, arg0):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.remove(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: remove " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.update(arg0, arg1)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: update " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.insert(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: insert " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.contains(arg0)
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: contains " + str(arg0) + " " + english_duration(durn))
 
     def all(self):
-        with self.lock:
+        start = time.time()
+        try:
             return self.delegate.all()
+        finally:
+            durn = time.time() - start
+            if durn > .01:
+                debug("TinyDB op >.01s: all " + english_duration(durn))
 
 
 class NotPUTting(Exception):
@@ -344,12 +380,14 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
         update_instruction_in_table(files_table, 'DELETE LOCALLY', relative_file_name)
 
     section_end(get_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
-          + " local deletes (comparison of all the files up on Svn to local files) took %s.", start)
+          + " local deletes (comparison of all the files on the Subversion server to files in the sync dir) took %s.", start)
 
     my_trace(2,  " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
 
 
 def english_duration(duration):
+    if duration < 1:
+        return str(round(duration*1000)) + " ms"
     if duration < 90:
         return str(round(duration, 2)) + " secs"
     if duration < 5400:
@@ -408,7 +446,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         more_to_do = False
         start = time.time()
         num_rows = 0
-        count = 0
+        file_count = 0
 
         try:
             rows = files_table.search(Query().instruction == "GET")
@@ -416,7 +454,6 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
             if len(rows) > 3:
                 my_trace(2,  ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
             for row in rows:
-
                 relative_file_name = row['relativeFileName']
                 is_file = row['isFile'] == "1"
                 old_sha1_should_be = row['localSha1']
@@ -437,12 +474,13 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                         'localSha1': None,
                         'sz_ts': 0},
                         Query().relativeFileName == relative_file_name)
+
                 else:
-                    (repoRev, sha1,
-                     baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session,
-                                                                                                  remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
+                    (repoRev, sha1, baseline_relative_path_not_used) \
+                        = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
 
                     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
+
                     # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
                     # See https://github.com/requests/requests/issues/2155
                     # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
@@ -457,7 +495,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                         for chunk in get.iter_content(chunk_size=500000000):
                             if chunk:
                                 f.write(chunk)
-                    count += 1
+                    file_count += 1
                     sha1 = calculate_sha1_from_local_file(abs_local_file_path)
                     osstat = os.stat(abs_local_file_path)
                     size_ts = osstat.st_size + osstat.st_mtime
@@ -467,9 +505,9 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
         finally:
 
             section_end(num_rows > 0,  "Group " + str(group) + " of"
-                     + ": GETs from Subversion server took %s, " + str(count)
-                     + " files total (from " + str(num_rows)
-                     + " total), at " + str(round(count / (time.time() - start) , 2)) + "/sec.", start)
+                     + ": GETs from Subversion server took %s: " + str(file_count)
+                     + " files, and " + str(num_rows - file_count)
+                     + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec.", start)
 
     my_trace(2,  " ---> perform_GETs_per_instructions - end")
 
@@ -1058,8 +1096,9 @@ def main(argv):
     if not os.path.exists(db_dir):
         os.mkdir(db_dir)
 
-    db = TinyDB(db_dir + os.sep + "subsyncit.db")
-    files_table  = MyTinyDBLock(db.table('files'))
+
+    db = TinyDB(db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
+    files_table  = MyTinyDBTrace(db.table('files'))
 
     last_scanned_path  = db_dir + os.sep + "last_scanned"
     if not os.path.exists(last_scanned_path):
@@ -1147,10 +1186,14 @@ def main(argv):
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
         pass
+
     try:
         file_system_watcher.stop()
     except KeyError:
         pass
+
+    db.close()
+
     is_shutting_down.append(True)
     try:
         file_system_watcher.join()

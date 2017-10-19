@@ -2,25 +2,22 @@
 
 <hr>
 
-A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server), and does not have any other server-side install.
+A file sync client that uses a Subversion repo as a backing-store (in a simple Apache2 server via its WebDAV api), and does not have any other server-side install.
 It is written in Python, works on Windows, Mac and Linux, and does not depend on a Subversion install on the client.
 
 It has been tested with files up to 12GB in size (made of random bytes). It has also been tested with a Subversion repository holding
 3.4TB of history.
 
-Corporates would be attracted to this, if:
+Corporates would be attracted to this, if they:
 
-* They prefer to deploy their own server storage (public or private cloud, on-premises, SBCs in the LAN, containers), rather than trust an online service.
-* They want a file-sync solution with strong versioning.
-* They already have a subversion instance somewhere.
-* They don't want to be charged usage fees, however small.
-* Don't mind the lack of mobile device clients (for now)
+* Prefer to deploy their own server storage (public or private cloud, on-premises, SBCs in the LAN, Docker containers), rather than trust an online service.
+* Want a file-sync solution with strong versioning, that's good enough for audits.
+* Already have a subversion instance somewhere
+* Don't want to be charged usage fees, however small.
+* Imagine a bunch of workflows around documents, who can edit them, how long for, and integrations with other applications and services.
+* Mind the lack of mobile device clients (for now)
 
-(Home deployers might like it for the same reasons)
-
-**Fun fact**: Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
-trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
-[3](https://paulhammant.com/2017/09/28/choosing-between-blockchains-and-vanilla-merkle-trees/).
+(Home deployers might like it for many of the same reasons)
 
 ## Releases
 
@@ -29,7 +26,7 @@ There have not been any releases yet, but Subsyncit certainly works if you've ch
 # Glossary
 
 * Client - a workstation, laptop or mobile device.
-* Server - a computer on which a suitable Subversion is installed (Mod_Web_Dav, SVNAutoversioning and others on).
+* Server - a computer on which a suitable Subversion is installed (Mod_Web_Dav, SVNAutoversioning 'on', and others on).
 * Remote Subversion Repository (or repo) - on the server, a configuration of subversion that can take commits for so-authorized people.
 * Local Sync Directory - on the client a single directory, the contents for which will synchronized up and down to the remote Subversion repo.
 
@@ -82,10 +79,20 @@ There are none as Subsyncit does not have a user interface (yet).
 4. Directory mask (globbing includes/excludes) per user.
 5. Percolation of read-only bits for situations when the end user if not permitted to PUT a file back if the change it. (Rasied with the Subversion dev team: [SVN-4691](https://issues.apache.org/jira/browse/SVN-4691)).
 6. Hidden unzipping of MS Office documents on the server side. [I've mulled this before](https://paulhammant.com/2014/10/28/corporate-file-sync-agony-and-ecstasy#vcs-systems-should-be-the-backends-for-file-sync) and [discussed it with the Subversion team](https://groups.google.com/forum/#!topic/subversion-development/YE0F0nYlR-U), but will have to implement it client side.
-7. Better Merkle-tree behavior
+7. Merkle-tree behavior for subscription to changes
+
+# Frequently Asked Questions:
+
+1. Can this work with any WebDAV server? No, it is tied to Subversion for now.
 
 # Further Reading
 
 1. [Client Setup](https://github.com/subsyncit/subsyncit/wiki/Subsyncit-Client-Setup)  <-- this is all you need to read if you're trying out Subsyncit.
 2. [Server Setup](https://github.com/subsyncit/subsyncit/wiki/Subversion-Server-Setup)
 3. [Contributing to Subsyncit](https://github.com/subsyncit/subsyncit/wiki/Contributing-to-Subsyncit)
+
+# Fun fact
+
+Subversion has a hidden Merkle-tree which this tech relies on. If you're super interested, I've blogged on Merkle
+trees generally: [1](https://paulhammant.com/2017/09/17/merkle-trees-in-pictures/), [2](https://paulhammant.com/2017/09/17/old-school-merkle-trees-rock/),
+[3](https://paulhammant.com/2017/09/28/choosing-between-blockchains-and-vanilla-merkle-trees/).

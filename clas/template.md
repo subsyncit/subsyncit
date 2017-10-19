@@ -6,7 +6,7 @@ The following terms are used throughout this contributor license agreement (CLA 
 An affiliate is any entity that controls or is controlled by the legal entity, or is under
 common control with it.
 
-**Subsyncit** - the project being developed at https://github.com/paul-hammant/subsyncit
+**Subsyncit** - the project being developed at https://github.com/subsyncit/subsyncit
 
 **Contribution** - any type of work that is submitted to Subsyncit, including any modifications
 or additions to existing work.

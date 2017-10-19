@@ -37,8 +37,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         ' me know when you&apos;re done, thanks". Feature coming soon. (placeholder 1)',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon. (placeholder 2)',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
-        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
+        'GH': 'is open source <a href="https://github.com/subsyncit/subsyncit">on GitHub</a>, of course. ',
+        'GH2': 'The installation instructions are <a href="https://github.com/subsyncit/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
         ' people<br>right now while this is in BETA (sorry). Click on the octocat:'
     });
 
@@ -79,8 +79,8 @@ ourApp.config(['$translateProvider', function ($translateProvider) {
         ' me know when you&apos;re done, thanks". Feature coming soon. (place holder 1)',
         'TESTIMONIAL_2': 'I hope he is going to stop talking about it soon. (place holder 2)',
         'PH_FRIEND': 'Paul&apos;s friend',
-        'GH': 'is open source <a href="https://github.com/paul-hammant/subsyncit">on GitHub</a>, of course. ',
-        'GH2': 'The installation instructions are <a href="https://github.com/paul-hammant/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
+        'GH': 'is open source <a href="https://github.com/subsyncit/subsyncit">on GitHub</a>, of course. ',
+        'GH2': 'The installation instructions are <a href="https://github.com/subsyncit/subsyncit/blob/master/CLIENT-SETUP.md">here</a>,<br> but installation is really only for IT' +
         ' people<br>right now while this is in BETA (sorry). Click on the octocat:'
     });
 

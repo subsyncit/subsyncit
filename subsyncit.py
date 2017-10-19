@@ -740,7 +740,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
     if "PROPFIND requests with a Depth of \"infinity\"" in output:
         print("'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
               "the server (in httpd.conf probably). Refer to " \
-              "https://github.com/paul-hammant/subsyncit/blob/master/SERVER-SETUP.md. " \
+              "https://github.com/subsyncit/subsyncit/wiki/Subversion-Server-Setup. " \
               "Subsyncit is refusing to run.")
         exit(1)
 

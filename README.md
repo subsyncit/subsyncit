@@ -86,6 +86,6 @@ There are none as Subsyncit does not have a user interface (yet).
 
 # Further Reading
 
-1. [Client Setup](https://github.com/paul-hammant/subsyncit/wiki/Subsyncit-Client-Setup)  <-- this is all you need to read if you're trying out Subsyncit.
-2. [Server Setup](https://github.com/paul-hammant/subsyncit/wiki/Subversion-Server-Setup)
-3. [Contributing to Subsyncit](https://github.com/paul-hammant/subsyncit/wiki/Contributing-to-Subsyncit)
+1. [Client Setup](https://github.com/subsyncit/subsyncit/wiki/Subsyncit-Client-Setup)  <-- this is all you need to read if you're trying out Subsyncit.
+2. [Server Setup](https://github.com/subsyncit/subsyncit/wiki/Subversion-Server-Setup)
+3. [Contributing to Subsyncit](https://github.com/subsyncit/subsyncit/wiki/Contributing-to-Subsyncit)

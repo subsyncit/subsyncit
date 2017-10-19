@@ -26,7 +26,6 @@ import sh
 class BaseSyncTest(unittest.TestCase):
 
 
-
     line = ""
 
     def setup(self):

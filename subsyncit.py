@@ -219,11 +219,11 @@ def get_suffix(relative_file_name):
     return extension
 
 
-def make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_repo_url, baseline_relative_path, repo_root):
-    request = requests_session.request('MKCOL', remote_subversion_repo_url + dir.replace(os.sep, "/"))
+def make_remote_subversion_directory_and_return_revision(requests_session, dir, remote_subversion_directory, baseline_relative_path, repo_parent_directory):
+    request = requests_session.request('MKCOL', remote_subversion_directory + dir.replace(os.sep, "/"))
     rc = request.status_code
     if rc == 201:
-        return get_revision_for_remote_directory(requests_session, remote_subversion_repo_url, dir.replace(os.sep, "/"), baseline_relative_path, repo_root)
+        return get_revision_for_remote_directory(requests_session, remote_subversion_directory, dir.replace(os.sep, "/"), baseline_relative_path, repo_parent_directory)
     raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
 
 
@@ -231,7 +231,7 @@ def esc(name):
     return name.replace("?", "%3F").replace("&", "%26")
 
 
-def make_directories_if_missing_in_db(files_table, dname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root):
+def make_directories_if_missing_in_db(files_table, dname, requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_directory):
     dirs_made = 0
     if dname == "":
         return 0
@@ -242,10 +242,10 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, remo
         if parentname != "":
             parent = files_table.get(Query().relativeFileName == parentname)
             if not parent or parent['repoRev'] == 0:
-                dirs_made += make_directories_if_missing_in_db(files_table, parentname, requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                dirs_made += make_directories_if_missing_in_db(files_table, parentname, requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
 
     if not dir:
-        make_directories_if_missing_in_db(files_table, dirname(dname), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+        make_directories_if_missing_in_db(files_table, dirname(dname), requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
         dirs_made += 1
         dir = {'relativeFileName': dname,
                'isFile': "0",
@@ -253,7 +253,7 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, remo
                'localSha1': None,
                'sz_ts': 0,
                'instruction': None,
-               'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_repo_url, baseline_relative_path, repo_root)
+               'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
                }
         files_table.insert(dir)
     elif dir['repoRev'] == 0:
@@ -261,13 +261,13 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, remo
         files_table.update(
             {
                 'instruction': None,
-                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_repo_url, baseline_relative_path, repo_root)
+                'repoRev': make_remote_subversion_directory_and_return_revision(requests_session, dname, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
             },
             Query().relativeFileName == dname)
     return dirs_made
 
 
-def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table, alleged_remoteSha1, baseline_relative_path, repo_root):
+def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_directory, absolute_local_root_path, files_table, alleged_remoteSha1, baseline_relative_path, repo_parent_directory):
     dirs_made = 0
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(0.1)
@@ -276,16 +276,16 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
         raise NotPUTtingAsFileStillBeingWrittenTo(abs_local_file_path)
     relative_file_name = get_relative_file_name(abs_local_file_path, absolute_local_root_path)
 
-    dirs_made += make_directories_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_repo_url, baseline_relative_path, repo_root)
+    dirs_made += make_directories_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
 
     if alleged_remoteSha1:
-        (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path)
+        (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path)
         if actual_remote_sha1 and actual_remote_sha1 != alleged_remoteSha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser() # force into clash scenario later
 
     # TODO has it changed on server
     with open(abs_local_file_path, "rb") as f:
-        put = requests_session.put(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), data=f.read())
+        put = requests_session.put(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), data=f.read())
         output = put.content.decode('utf-8')
         if put.status_code != 201 and put.status_code != 204:
             raise NotPUTtingAsTheServerObjected(put.status_code, output)
@@ -367,9 +367,9 @@ def extract_name_type_rev(entry_xml_element):
     return file_or_dir, relative_file_name, rev
 
 
-def get_revision_for_remote_directory(requests_session, remote_subversion_repo_url, relative_file_name, baseline_relative_path, repo_root):
+def get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_directory):
 
-    options = requests_session.request('OPTIONS', remote_subversion_repo_url + esc(relative_file_name),
+    options = requests_session.request('OPTIONS', remote_subversion_directory + esc(relative_file_name),
                                data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
 
     if options.status_code != 200:
@@ -378,7 +378,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_repo_u
     youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
     path = "!svn/rvr/" + youngest_rev + "/" + baseline_relative_path
-    url = remote_subversion_repo_url.replace(repo_root + baseline_relative_path, repo_root + path, 1)
+    url = remote_subversion_directory.replace(repo_parent_directory + baseline_relative_path, repo_parent_directory + path, 1)
     report = requests_session.request('REPORT', url + "/" + esc(relative_file_name),
                               data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
                                    '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:author</S:revprop><S'
@@ -392,7 +392,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_repo_u
     return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
 
 
-def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path, baseline_relative_path, repo_root):
+def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_directory, absolute_local_root_path, baseline_relative_path, repo_parent_directory):
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_GETs_per_instructions - start")
     start = time.time()
@@ -410,7 +410,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
             is_file = row['isFile'] == "1"
             old_sha1_should_be = row['localSha1']
             abs_local_file_path = (absolute_local_root_path + relative_file_name)
-            head = requests_session.head(remote_subversion_repo_url + esc(relative_file_name))
+            head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
 
             if not is_file or ("Location" in head.headers and head.headers[
                 "Location"].endswith("/")):
@@ -421,7 +421,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 #     print ("Dir GET needlessly: " + relative_file_name)
                 # print("rr=" + str(rr))
                 files_table.update({
-                    'repoRev': get_revision_for_remote_directory(requests_session, remote_subversion_repo_url, relative_file_name, baseline_relative_path, repo_root),
+                    'repoRev': get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_directory),
                     'remoteSha1': None,
                     'localSha1': None,
                     'sz_ts': 0},
@@ -429,9 +429,9 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
             else:
                 (repoRev, sha1,
                  baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session,
-                                                                                            remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there=True)
+                                                                                            remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
 
-                get = requests_session.get(remote_subversion_repo_url + esc(relative_file_name).replace(os.sep, "/"), stream=True)
+                get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
                 # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
                 # See https://github.com/requests/requests/issues/2155
                 # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
@@ -586,7 +586,7 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_repo_url, baseline_relative_path, absolute_local_root_path, repo_root):
+def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_directory, baseline_relative_path, absolute_local_root_path, repo_parent_directory):
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
 
@@ -625,12 +625,12 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                         num_rows = num_rows -1
                         update_instruction_in_table(files_table, None, rel_file_name)
                     else:
-                        dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_repo_url, absolute_local_root_path, files_table,
-                                                                         row['remoteSha1'], baseline_relative_path, repo_root)  # <h1>Created</h1>
+                        dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, remote_subversion_directory, absolute_local_root_path, files_table,
+                                                                         row['remoteSha1'], baseline_relative_path, repo_parent_directory)  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts)
+                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_directory, baseline_relative_path, size_ts)
                         put_count += 1
                         update_instruction_in_table(files_table, None, rel_file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
@@ -675,8 +675,8 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
     return possible_clash_encountered
 
-def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_repo_url, baseline_relative_path, size_ts):
-    url = remote_subversion_repo_url + esc(relative_file_name)
+def update_sha_and_revision_for_row(requests_session, files_table, relative_file_name, local_sha1, remote_subversion_directory, baseline_relative_path, size_ts):
+    url = remote_subversion_directory + esc(relative_file_name)
     elements_for = svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
     i = len(elements_for)
     if i > 1:
@@ -691,7 +691,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
             'sz_ts': size_ts
         }, Query().relativeFileName == relative_file_name)
 
-def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_repo_url, absolute_local_root_path):
+def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_directory, absolute_local_root_path):
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
 
@@ -703,7 +703,7 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         relative_file_name = row['relativeFileName']
         if row['remoteSha1'] :
             update_instruction_in_table(files_table, None, relative_file_name)
-        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there=True)
+        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
         update_row_revision(files_table, relative_file_name, rev=revn)
         update_instruction_in_table(files_table, None, relative_file_name)
 
@@ -712,7 +712,7 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
                  + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + "/sec.")
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
 
-def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_repo_url):
+def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_directory):
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
 
@@ -724,7 +724,7 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
     directories_deleted = 0
     for row in rows:
         rfn = row['relativeFileName']
-        requests_delete = requests_session.delete(remote_subversion_repo_url + esc(rfn).replace(os.sep, "/"))
+        requests_delete = requests_session.delete(remote_subversion_directory + esc(rfn).replace(os.sep, "/"))
         output = requests_delete.content.decode('utf-8')
         # debug(row['relativeFileName'] + ": DELETE " + str(requests_delete.status_code))
         if row['isFile'] == 1:  # isFile
@@ -745,13 +745,13 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
 
     my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
 
-def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_repo_url, relative_file_name, absolute_local_root_path, must_be_there = False):
+def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there = False):
     ver = -1
     sha1 = None
     baseline_relative_path = ""
     content = ""
     try:
-        url = remote_subversion_repo_url + esc(relative_file_name).replace("\\", "/")
+        url = remote_subversion_directory + esc(relative_file_name).replace("\\", "/")
         if url.endswith("/"):
             url = url[:-1]
         propfind = requests_session.request('PROPFIND', url, data=PROPFIND, headers={'Depth': '0'})
@@ -781,8 +781,8 @@ def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_
     return (ver, sha1, baseline_relative_path)
 
 
-def get_repo_root(requests_session, remote_subversion_repo_url):
-    url = remote_subversion_repo_url
+def get_repo_parent_directory(requests_session, remote_subversion_directory):
+    url = remote_subversion_directory
     if url.endswith("/"):
         url = url[:-1]
 
@@ -962,9 +962,9 @@ def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
         return False
     return True
 
-def get_excluded_filename_patterns(requests_session, remote_subversion_repo_url):
+def get_excluded_filename_patterns(requests_session, remote_subversion_directory):
     try:
-        get = requests_session.get(remote_subversion_repo_url + ".subsyncit-excluded-filename-patterns")
+        get = requests_session.get(remote_subversion_directory + ".subsyncit-excluded-filename-patterns")
         if (get.status_code == 200):
             lines = get.content.decode('utf-8').splitlines()
             regexes = []
@@ -1002,7 +1002,7 @@ def main(argv):
 
     parser = argparse.ArgumentParser(description='Subsyncit client')
 
-    parser.add_argument("remote_subversion_repo_url")
+    parser.add_argument("remote_subversion_directory")
     parser.add_argument("local_root_path")
     parser.add_argument("user")
     parser.add_argument('--passwd', dest='passwd', help="Password")
@@ -1034,8 +1034,8 @@ def main(argv):
             pass
 
 
-    if not str(args.remote_subversion_repo_url).endswith("/"):
-        args.remote_subversion_repo_url += "/"
+    if not str(args.remote_subversion_directory).endswith("/"):
+        args.remote_subversion_directory += "/"
 
     verifySetting = True
 
@@ -1069,7 +1069,7 @@ def main(argv):
     local_adds_chgs_deletes_queue = IndexedSet()
 
     last_root_revision = -1
-    repo_root = ""
+    repo_parent_directory = ""
     is_shutting_down = []
 
     file_system_watcher = None
@@ -1096,14 +1096,14 @@ def main(argv):
             requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
-                get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_repo_url, "", args.absolute_local_root_path, must_be_there=True) # root
+                get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_directory, "", args.absolute_local_root_path, must_be_there=True) # root
             if root_revision_on_remote_svn_repo > 0:
-                repo_root = get_repo_root(requests_session, args.remote_subversion_repo_url)
+                repo_parent_directory = get_repo_parent_directory(requests_session, args.remote_subversion_directory)
 
             to_add_chg_or_del = 0
             if root_revision_on_remote_svn_repo != -1:
                 if iteration == 0: # At boot time only for now
-                    excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_repo_url)
+                    excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_directory)
                     notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
 
                 scan_start_time = int(time.time())
@@ -1121,19 +1121,19 @@ def main(argv):
 
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path, baseline_relative_path, repo_root)
+                perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path, repo_parent_directory)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_repo_url, baseline_relative_path, args.absolute_local_root_path, repo_root)
+                possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_directory, baseline_relative_path, args.absolute_local_root_path, repo_parent_directory)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, args.remote_subversion_repo_url)
+                perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, args.remote_subversion_directory)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
                     create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                 svn_metadata_xml_elements_for(requests_session, args.remote_subversion_repo_url,baseline_relative_path))
-                    # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_repo_url, args.absolute_local_root_path)
+                                 svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path))
+                    # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path)
                     last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
 

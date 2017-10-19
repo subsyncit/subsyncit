@@ -67,13 +67,13 @@ PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
 
 def debug(message):
     pass
-    ## if not "PROPFIND" in message:
-    #    print(message)
 
 
 def my_trace(lvl, message):
     # pass
     if lvl == 1:
+        print(message)
+    if lvl == 2:
         print(message)
 
 
@@ -279,7 +279,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
     dirs_made += make_directories_if_missing_in_db(files_table, dirname(relative_file_name), requests_session, remote_subversion_directory, baseline_relative_path, repo_parent_directory)
 
     if alleged_remoteSha1:
-        (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path)
+        (ver, actual_remote_sha1, not_used_here) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path)
         if actual_remote_sha1 and actual_remote_sha1 != alleged_remoteSha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser() # force into clash scenario later
 
@@ -428,8 +428,8 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     Query().relativeFileName == relative_file_name)
             else:
                 (repoRev, sha1,
-                 baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session,
-                                                                                            remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
+                 baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session,
+                                                                                              remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
 
                 get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
                 # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
@@ -588,7 +588,7 @@ def extract_path_from_baseline_rel_path(baseline_relative_path, line):
 
 def perform_PUTs_per_instructions(requests_session, files_table, remote_subversion_directory, baseline_relative_path, absolute_local_root_path, repo_parent_directory):
 
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_PUTs_per_instructions - start")
 
     possible_clash_encountered = False
     more_to_do = True
@@ -596,6 +596,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
     # Batches of 100 so that here's intermediate reporting.
     while more_to_do:
+        group += 1
         more_to_do = False
         start = time.time()
         num_rows = 0
@@ -666,12 +667,12 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                     # speed = str(round(put_count / duration, 2)) + "/sec "
                 if dirs_made > 0:
                     dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
-                my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ("" if group == 0 else "Group " + str(group) + " of")
+                my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + " Group " + str(group) + " of"
                          + ": PUTs on Subversion server took " + english_duration(time.time() - start) + ", " + str(put_count)
                          + " PUT files, " + not_actually_changed_blurb
                          + speed + dirs_made_blurb + ".")
 
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_PUTs_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_PUTs_per_instructions - end")
 
     return possible_clash_encountered
 
@@ -693,7 +694,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 
 def update_revisions_for_created_directories(requests_session, files_table, remote_subversion_directory, absolute_local_root_path):
 
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> update_revisions_for_created_directories - start")
 
     rows = files_table.search(Query().instruction == 'MKCOL')
 
@@ -703,18 +704,18 @@ def update_revisions_for_created_directories(requests_session, files_table, remo
         relative_file_name = row['relativeFileName']
         if row['remoteSha1'] :
             update_instruction_in_table(files_table, None, relative_file_name)
-        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
+        (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there=True)
         update_row_revision(files_table, relative_file_name, rev=revn)
         update_instruction_in_table(files_table, None, relative_file_name)
 
     if len(rows) > 0:
         my_trace(1, strftime('%Y-%m-%d %H:%M:%S') + ": MKCOLs on Svn repo took " + english_duration(time.time() - start) + ", " + str(len(rows))
                  + " directories, " + str(round(len(rows) / (time.time() - start), 2)) + "/sec.")
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> update_revisions_for_created_directories - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> update_revisions_for_created_directories - end")
 
-def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, remote_subversion_directory):
+def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, remote_subversion_directory):
 
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - start")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - start")
 
     start = time.time()
 
@@ -743,9 +744,9 @@ def perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session,
               + str(directories_deleted) + " directories and " + str(files_deleted) + " files, "
               + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE.")
 
-    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + "---> perform_DELETEs_on_remote_subversion_repo_per_instructions - end")
+    my_trace(2, strftime('%Y-%m-%d %H:%M:%S') + " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - end")
 
-def get_remote_subversion_repo_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there = False):
+def get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, absolute_local_root_path, must_be_there = False):
     ver = -1
     sha1 = None
     baseline_relative_path = ""
@@ -1096,7 +1097,7 @@ def main(argv):
             requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
-                get_remote_subversion_repo_revision_for(requests_session, args.remote_subversion_directory, "", args.absolute_local_root_path, must_be_there=True) # root
+                get_remote_subversion_server_revision_for(requests_session, args.remote_subversion_directory, "", args.absolute_local_root_path, must_be_there=True) # root
             if root_revision_on_remote_svn_repo > 0:
                 repo_parent_directory = get_repo_parent_directory(requests_session, args.remote_subversion_directory)
 
@@ -1127,7 +1128,7 @@ def main(argv):
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_directory, baseline_relative_path, args.absolute_local_root_path, repo_parent_directory)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_DELETEs_on_remote_subversion_repo_per_instructions(requests_session, files_table, args.remote_subversion_directory)
+                perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, args.remote_subversion_directory)
                 transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:

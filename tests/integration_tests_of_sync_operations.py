@@ -25,7 +25,6 @@ import sh
 from decorator import decorator
 
 from base_sync_test import BaseSyncTest
-from recreate_svn_repo import make_or_wipe_server_side_subversion_repo
 import docker
 from docker.errors import NotFound
 
@@ -54,6 +53,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
         client = docker.from_env()
 
+        print("Kill Docker container from last test suite invocation...")
         try:
             ctr = client.containers.get("subsyncitTests")
             ctr.stop()
@@ -70,7 +70,9 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                 pass # keep looping until there's an exception
         except NotFound:
             pass
+        print("... done")
 
+        print("Start Docker container for this test suite invocation...")
         client.containers.run("subsyncit/alpine-svn-dav", name="subsyncitTests", detach=True, ports={'80/tcp': 8099}, auto_remove=True)
         content = ""
         while "It works!" not in content:
@@ -81,6 +83,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
                 pass
 
         requests.request('MKCOL', "http://127.0.0.1:8099/svn/testrepo/integrationTests", auth=("davsvn", "davsvn"), verify=False)
+        print("... done")
 
     def setUp(self):
 
@@ -155,6 +158,7 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
             self.end(p2, IntegrationTestsOfSyncOperations.testSyncDir2)
+
 
     @timedtest
     def test_a_hidden_files_dont_get_put_into_svn(self):
@@ -523,8 +527,8 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
         start = time.time()
         p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
         try:
-            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be created and be at least " + str(sz) + " MB ... ")
-            self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
+            print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be downloaded from Svn and be at least " + str(sz) + " MB ... ")
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
             print(" ... took secs: " + str(round(time.time() - start, 1)))
 
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
@@ -544,27 +548,26 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 
             start = time.time()
 
-            print("start p1 again")
+            print("start Subsyncit again")
             p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
-            self.wait_for_file_contents_to_be_sized_below(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
+            self.wait_for_file_contents_to_be_sized_below(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz*99/100))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
-            self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/2))
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", (sz/10))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
             p1.kill()
             print("Killed after secs: " + str(round(time.time() - start, 1)))
             # self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
-
-            time.sleep(2)
+            p1.wait
             aborted_get_size = os.stat(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile").st_size
 
             print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite")
 
-            self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size " + str(sz))
+            self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
             #self.list_files(IntegrationTestsOfSyncOperations.testSyncDir1)
 
             p1 = self.start_subsyncit(self.svn_repo + self.rel_dir_1, IntegrationTestsOfSyncOperations.testSyncDir1)
-            self.wait_for_file_contents_to_be_sized_above(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(IntegrationTestsOfSyncOperations.testSyncDir1 + "testBigRandomFile", sz)
         finally:
             self.end(p1, IntegrationTestsOfSyncOperations.testSyncDir1)
 
@@ -598,19 +601,24 @@ class IntegrationTestsOfSyncOperations(BaseSyncTest):
 if __name__ == '__main__':
     import sys
 
-    test_name = sys.argv[1].lower()
+    if (len(sys.argv)) >= 2:
+        test_name = sys.argv[1].lower()
+    else:
+        test_name = "all"
 
-    size = sys.argv[2]
+    if (len(sys.argv)) >= 3:
+        size_of_big_test_file = sys.argv[2]
+    else:
+        size_of_big_test_file = "512"
 
     test_loader = unittest.TestLoader()
     test_names = test_loader.getTestCaseNames(IntegrationTestsOfSyncOperations)
-
     suite = unittest.TestSuite()
     if test_name == "all":
         for tname in test_names:
-            suite.addTest(IntegrationTestsOfSyncOperations(tname, size))
+            suite.addTest(IntegrationTestsOfSyncOperations(tname, size_of_big_test_file))
     else:
-        suite.addTest(IntegrationTestsOfSyncOperations(test_name, size))
+        suite.addTest(IntegrationTestsOfSyncOperations(test_name, size_of_big_test_file))
 
     result = unittest.TextTestRunner().run(suite)
     sys.exit(not result.wasSuccessful())

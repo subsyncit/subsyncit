@@ -63,11 +63,11 @@ class BaseSyncTest(unittest.TestCase):
             text_file.write("anything")
 
     def wait_for_file_to_appear(self, op2):
+        start = time.time()
         while not os.path.exists(op2):
-            start = time.time()
             if time.time() - start > 15:
                 self.fail("no sync'd file")
-            time.sleep(.1)
+            time.sleep(.01)
 
 
     def wait_for_URL_to_appear(self, url):
@@ -106,11 +106,11 @@ class BaseSyncTest(unittest.TestCase):
         return python
 
 
-    def wait_for_file_contents_to_be_sized_above(self, f, sz):
+    def wait_for_file_contents_to_be_sized_above_or_eq_too(self, f, sz):
         self.wait_for_file_to_appear(f)
         start = time.time()
         while os.stat(f).st_size < sz:
-            time.sleep(.05)
+            time.sleep(.01)
             if time.time() - start > 15:
                 self.fail("should have made it above that size by now")
 
@@ -119,7 +119,7 @@ class BaseSyncTest(unittest.TestCase):
         self.wait_for_file_to_appear(f)
         start = time.time()
         while os.stat(f).st_size >= sz:
-            time.sleep(.05)
+            time.sleep(.01)
             if time.time() - start > 15:
                 self.fail("should have made it below that size by now")
 

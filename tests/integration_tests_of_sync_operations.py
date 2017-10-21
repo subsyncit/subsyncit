@@ -13,10 +13,12 @@
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import argparse
 import os
 import time
 import unittest
 import shutil
+import sys
 import glob2
 import requests
 import sh
@@ -34,10 +36,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     p1 = None
     p2 = None
     container = None
+    kill_container_at_end = False
 
-    def __init__(self, testname, size):
+    def __init__(self, testname, size, kill_container_at_end):
         super(IntegrationTestsOfSyncOperations, self).__init__(testname)
         self.size = size
+        IntegrationTestsOfSyncOperations.kill_container_at_end = kill_container_at_end
         self.output = ""
         self.user = "davsvn"
         self.passwd = "davsvn"
@@ -70,8 +74,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        pass
-        #cls.kill_docker_container(False)
+        print("killin container? ", cls.kill_container_at_end)
+        if cls.kill_container_at_end:
+            cls.kill_docker_container(False)
 
     @classmethod
     def kill_docker_container(cls, wait):
@@ -734,26 +739,23 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    import sys
 
-    if (len(sys.argv)) >= 2:
-        test_name = sys.argv[1].lower()
-    else:
-        test_name = "all"
+    parser = argparse.ArgumentParser(description='Subsyncit Integration Tests')
+    parser.add_argument('--test', dest='test_name', default="all", help="Test name if just one test")
+    parser.add_argument('--big', dest='size_of_big_test_file', default="512", help="MB for big file")
+    parser.add_argument('--killc', dest='kill_container_at_end', action='store_true', help="Kill container at end?")
+    parser.set_defaults(kill_container_at_end=False)
 
-    if (len(sys.argv)) >= 3:
-        size_of_big_test_file = sys.argv[2]
-    else:
-        size_of_big_test_file = "512"
+    args = parser.parse_args(sys.argv[1:])
 
     test_loader = unittest.TestLoader()
     test_names = test_loader.getTestCaseNames(IntegrationTestsOfSyncOperations)
     suite = unittest.TestSuite()
-    if test_name == "all":
+    if args.test_name == "all":
         for tname in test_names:
-            suite.addTest(IntegrationTestsOfSyncOperations(tname, size_of_big_test_file))
+            suite.addTest(IntegrationTestsOfSyncOperations(tname, args.size_of_big_test_file, args.kill_container_at_end))
     else:
-        suite.addTest(IntegrationTestsOfSyncOperations(test_name, size_of_big_test_file))
+        suite.addTest(IntegrationTestsOfSyncOperations(args.test_name, args.size_of_big_test_file, args.kill_container_at_end))
 
     result = unittest.TextTestRunner().run(suite)
     sys.exit(not result.wasSuccessful())

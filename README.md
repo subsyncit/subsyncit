@@ -84,8 +84,9 @@ There are none as Subsyncit does not have a user interface (yet).
 # Frequently Asked Questions:
 
 1. Can this work with any WebDAV server? - No, it is tied to Subversion for now.
-2. Is this 'decentralized'? - No, it is client server
-3. Does it have failover, DR, replication on the server side?  No, that'd be additional setup (watch for how-to's later)
+2. Can it work with Subversion installs that are part of Assembla or RhodeCode's platforms?  Yes, with two small changes to config.
+3. Is this 'decentralized'? - No, it is client server
+4. Does it have failover, DR, replication on the server side?  No, that'd be additional setup (watch for how-to's later)
 
 # Further Reading
 

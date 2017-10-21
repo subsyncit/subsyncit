@@ -15,6 +15,7 @@
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import argparse
 import os
+import copy
 import time
 import unittest
 import shutil
@@ -343,40 +344,53 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_files_with_special_characters_make_it_to_svn_and_back(self):
 
-        dir = self.test_sync_dir_a
+        # It is alleged that some characters are not allowed in right-of-the-port-number paths.
+        # Between them Apache2 and Subversion munge a few for display purposes. That's either on the way into Subversion,
+        # or on the way back over HTTP into the file system. No matter - the most important representation of file name
+        # is in the file system, and we only require consistent GET/PUT from/to that.
+
 
         p1 = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
         try:
-            with open(dir + ".foo", "w", encoding="utf-8") as text_file:
-                text_file.write("Hello")
+            files = ["a&a", "b{b", "c?c", "d$d", "e;e", "f=f", "g+g", "h,h",
+                     "i(i", "j)j", "k[k", "l]l", "m:m", "n\'n", "o\"o", "p`p", "q*q", "r~r"]
+            for f in files:
+                with open(self.test_sync_dir_a + f, "w", encoding="utf-8") as text_file:
+                    text_file.write("Hello")
 
-            with open(dir + ".DS_Store", "w", encoding="utf-8") as text_file:
-                text_file.write("Hello")
-
-            os.makedirs(dir + "two")
-
-            with open(dir + "two/.foo", "w", encoding="utf-8") as text_file:
-                text_file.write("Hello")
-
-            with open(dir + "two/.DS_Store", "w", encoding="utf-8") as text_file:
-                text_file.write("Hello")
-
-            with open(dir + "control", "w", encoding="utf-8") as text_file:
-                text_file.write("Hello")
+            self.expect201(
+                requests.put(self.svn_url + "CONTROL",
+                             auth=(self.user, self.passwd), data="Hello",
+                             verify=False))
 
             start = time.time()
+            elapsed = 0
 
-            rc = 404
-            while rc != 200 and time.time() - start < 60:
-                rc = requests.get(self.svn_url + "control", auth=(self.user, self.passwd), verify=False).status_code
-                time.sleep(.2)
+            files_not_found_in_subversion = copy.deepcopy(files)
 
-            self.assertEqual(rc, 200, "URL " + self.svn_url + "control" + " should have been PUT, but it was not")
-            self.assertNotEqual(requests.get(self.svn_url + ".foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
-            self.assertNotEqual(requests.get(self.svn_url + ".DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
-            self.assertNotEqual(requests.get(self.svn_url + "two/.foo", auth=(self.user, self.passwd), verify=False).status_code, 200)
-            self.assertNotEqual(requests.get(self.svn_url + "two/.DS_Store", auth=(self.user, self.passwd), verify=False).status_code, 200)
+            while len(files) > 1 and elapsed < 90:
+                files2 = copy.deepcopy(files_not_found_in_subversion)
+                for f in files2:
+                    if requests.get(self.svn_url + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
+                        files_not_found_in_subversion.remove(f)
+                elapsed = time.time() - start
+
+            self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
+
+            # `?` isn't handled seamlessly by the requests library
+            if requests.get(self.svn_url + "c?c".replace("?", "%3f"),
+                            auth=(self.user, self.passwd),
+                            verify=False).status_code == 200:
+                files_not_found_in_subversion.remove("c?c")
+
+            self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion))
+
+            # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
+            self.assertEquals(str(sorted(
+                os.listdir(self.test_sync_dir_a))),
+                "['CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']")
+
 
         finally:
             self.end(p1, self.test_sync_dir_a)

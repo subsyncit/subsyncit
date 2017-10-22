@@ -576,6 +576,78 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         clash_file = glob2.glob(self.test_sync_dir_a + "*.clash_*")[0]
         self.assertEqual(os.stat(clash_file).st_size, aborted_get_size)
 
+    @timedtest
+    def test_that_we_understand_how_revisions_can_be_a_surrogate_for_a_proper_merkle_tree(self):
+
+        test_start = time.time()
+
+        # starting revision varies depending on how many tests are being run.
+        sr = self.repo_rev_for("")
+
+        self.expect201(requests.request('MKCOL', self.svn_url + "fred/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
+
+        def get_rev_summary_for_root_and_three_subdirectories(sr):
+            return "<root> : " + str(self.repo_rev_for("") - sr) + ", " + str(self.directory_revision_for("") - sr) + "\n" \
+                   + "fred/ : " + str(self.repo_rev_for("fred/") - sr) + ", " + str(self.directory_revision_for("fred/") - sr) + "\n" \
+                   + "wilma/ : " + str(self.repo_rev_for("wilma/") - sr) + ", " + str(self.directory_revision_for("wilma/") - sr) + "\n" \
+                   + "barney/ : " + str(self.repo_rev_for("barney/") - sr) + ", " + str(self.directory_revision_for("barney/") - sr) + "\n"
+
+        self.assertEquals(self.no_leading_spaces(
+            """<root> : 3, 3
+               fred/ : 3, 1
+               wilma/ : 3, 2
+               barney/ : 3, 3
+               """),
+            get_rev_summary_for_root_and_three_subdirectories(sr))
+
+        self.expect201(requests.request('MKCOL', self.svn_url + "wilma/bambam", auth=(self.user, self.passwd), verify=False))
+
+        # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
+        self.assertEquals(self.no_leading_spaces(
+            """<root> : 4, 4
+               fred/ : 4, 1
+               wilma/ : 4, 4
+               barney/ : 4, 3
+               """),
+            get_rev_summary_for_root_and_three_subdirectories(sr))
+
+    # ======================================================================================================
+
+    def no_leading_spaces(self, string):
+        c = [item.strip() for item in string.splitlines()]
+        return '\n'.join(c)
+
+    def directory_revision_for(self, dir):
+        options = requests.request("OPTIONS", self.svn_url + dir, auth=("davsvn", "davsvn"),
+                                   data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
+
+        self.assertEquals(options.status_code, 200)
+
+        content = options.content.decode("utf-8")
+        youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
+
+        rev_dir = self.svn_url.replace('testrepo/', 'testrepo/!svn/rvr/' + youngest_rev + "/") + dir
+        propfind = requests.request('PROPFIND', rev_dir, auth=("davsvn", "davsvn"),
+                                    data='<?xml version="1.0" encoding="utf-8"?>'
+                                         '<propfind xmlns="DAV:">'
+                                         '<prop>'
+                                         '<version-name/>'
+                                         '</prop>'
+                                         '</propfind>')
+
+        self.assertEquals(propfind.status_code, 207)
+
+        content = propfind.content.decode("utf-8")
+        return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
+
+    def repo_rev_for(self, dir):
+        get = requests.get(self.svn_url + dir, auth=(self.user, self.passwd), verify=False)
+        self.assertEqual(get.status_code, 200)
+        return int(str([line for line in get.text.splitlines() if 'testrepo - Revision' in line]).split(" ")[3][:-1])
+
+
     def make_a_big_random_file(self, filename, size):
         start = time.time()
         print("Making " + size + " MB random file ... ")

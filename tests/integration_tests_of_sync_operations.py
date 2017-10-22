@@ -14,6 +14,7 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import argparse
+import copy
 import os
 import copy
 import time
@@ -27,15 +28,16 @@ from decorator import decorator
 
 import docker
 from docker.errors import NotFound
+from tinydb import Query, TinyDB
 
 
 class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
-    i = 0
+    test_num = 0
     test_sync_dir_a = ""
     test_sync_dir_b = ""
-    p1 = None
-    p2 = None
+    process_a = None
+    process_b = None
     container = None
     kill_container_at_end = False
 
@@ -48,6 +50,18 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.passwd = "davsvn"
         self.svn_repo = "http://127.0.0.1:8099/svn/testrepo/"
         self.line = ""
+
+    @decorator
+    def timedtest(f, *args, **kwargs):
+
+        t1 = time.time()
+        out = f(*args, **kwargs)
+        t2 = time.time()
+        dt = str((t2 - t1) * 1.00)
+        dtout = dt[:(dt.find(".") + 4)]
+        print("----------------------------------------------------------")
+        print('Test {0} finished in {1}s'.format(getattr(f, "__name__", "<unnamed>"), dtout))
+        print("==========================================================")
 
     @classmethod
     def setUpClass(cls):
@@ -79,188 +93,44 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         if cls.kill_container_at_end:
             cls.kill_docker_container(False)
 
-    @classmethod
-    def kill_docker_container(cls, wait):
-        try:
-            ctr = cls.client.containers.get("subsyncitTests")
-            ctr.stop()
-            if wait:
-                status = 200
-                while status == 200:
-                    status = -1
-                    try:
-                        get = requests.get("http://127.0.0.1:8099")
-                        status = get.status_code
-                    except:
-                        pass
-                while cls.client.containers.get("subsyncitTests"):
-                    time.sleep(0.2)
-                    pass  # keep looping until there's an exception
-        except NotFound:
-            pass
 
     def setUp(self):
-        IntegrationTestsOfSyncOperations.i += 1
-        testNum = str(IntegrationTestsOfSyncOperations.i)
+
+        if os.name != 'nt':
+            self.home_dir = os.path.expanduser('~' + (os.getenv("SUDO_USER") or os.getenv("USER")))
+        else:
+            self.home_dir = os.path.expanduser(str(os.getenv('USERPROFILE')))
+
+        IntegrationTestsOfSyncOperations.test_num += 1
+        testNum = str(IntegrationTestsOfSyncOperations.test_num)
 
         self.rel_dir_a = "integrationTests/test_" + testNum + "a/"
         self.test_sync_dir_a = str(sh.pwd()).strip('\n') + self.rel_dir_a
-        self.reset_test_dir(self.test_sync_dir_a)
-
         self.rel_dir_b = "integrationTests/test_" + testNum + "b/"
         self.test_sync_dir_b = str(sh.pwd()).strip('\n') + self.rel_dir_b
+
+        self.db_dir_a = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_a.replace("/", "%47").replace(":", "%58").replace("\\", "%92")
+        self.db_dir_b = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_b.replace("/", "%47").replace(":", "%58").replace("\\", "%92")
+
+        self.reset_test_dir(self.test_sync_dir_a)
+        self.reset_test_dir(self.db_dir_a)
         self.reset_test_dir(self.test_sync_dir_b)
+        self.reset_test_dir(self.db_dir_b)
 
         self.svn_url = self.svn_repo + "integrationTests/test_" + testNum + "/"
         self.expect201(requests.request('MKCOL', self.svn_url, auth=(self.user, self.passwd), verify=False))
 
 
+
     def teardown(self):
-        self.end(self.p1, self.test_sync_dir_a)
-        self.end(self.p2, self.test_sync_dir_b)
-
-
-    def end(self, p, dir):
-        if p is not None:
-            self.signal_stop_of_subsyncIt(dir)
-
-    @decorator
-    def timedtest(f, *args, **kwargs):
-
-        t1 = time.time()
-        out = f(*args, **kwargs)
-        t2 = time.time()
-        dt = str((t2 - t1) * 1.00)
-        dtout = dt[:(dt.find(".") + 4)]
-        print("----------------------------------------------------------")
-        print('Test {0} finished in {1}s'.format(getattr(f, "__name__", "<unnamed>"), dtout))
-        print("==========================================================")
-
-    def reset_test_dir(self, dirname):
-        if os.path.exists(dirname):
-            shutil.rmtree(dirname)
-        os.makedirs(dirname)
-
-        if os.name != 'nt':
-            home_dir = os.path.expanduser('~' + (os.getenv("SUDO_USER") or os.getenv("USER")))
-        else:
-            home_dir = os.path.expanduser(str(os.getenv('USERPROFILE')))
-
-        if not dirname.endswith(os.sep):
-            dirname += os.sep
-
-        subsyncit_dir = home_dir + os.sep + ".subsyncit"
-        db_dir = subsyncit_dir + os.sep + dirname.replace("/","%47").replace(":","%58").replace("\\","%92")
-        # print("path of subsyncit settings=" + db_dir + " pertaining to " + dirname)
-        if os.path.exists(db_dir):
-             shutil.rmtree(db_dir)
-
-
-    def signal_stop_of_subsyncIt(self, dir_):
-        if not os.path.exists(dir_):
-            os.makedirs(dir_)
-
-        stop_ = dir_ + ".subsyncit.stop"
-        with open(stop_, "w") as text_file:
-            text_file.write("anything")
-
-    def wait_for_file_to_appear(self, op2):
-        start = time.time()
-        while not os.path.exists(op2):
-            if time.time() - start > 15:
-                self.fail("no sync'd file")
-            time.sleep(.01)
-
-
-    def wait_for_URL_to_appear(self, url):
-
-        status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
-        while status == 404:
-            start = time.time()
-            if time.time() - start > 15:
-                break
-            time.sleep(.1)
-            status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
-
-        if status != 200:
-            self.fail("URL " + url + " should have appeared, but it did not (status code: " + str(status) + ")")
-
-
-    def process_output(self, line):
-        print(line)
-        self.line += ("\n" + line)
-
-
-    def start_two_subsyncits(self):
-        p1 = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
-        p2 = self.start_subsyncit(self.svn_url, self.test_sync_dir_b)
-        return p1, p2
-
-
-    def start_subsyncit(self, svn_repo, dir, passwd=None):
-        if passwd is None:
-            passwd = self.passwd
-        print("Subsyncit start. URL: " + svn_repo + ", dir: " + dir)
-        python = sh.python3("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
-                           "--sleep-secs-between-polling", "1",
-                           '--passwd', passwd, _out=self.process_output,
-                           _err_to_out=True, _bg=True)
-        return python
-
-
-    def wait_for_file_contents_to_be_sized_above_or_eq_too(self, f, sz):
-        self.wait_for_file_to_appear(f)
-        start = time.time()
-        while os.stat(f).st_size < sz:
-            time.sleep(.01)
-            if time.time() - start > 15:
-                self.fail("should have made it above that size by now")
-
-
-    def wait_for_file_contents_to_be_sized_below(self, f, sz):
-        self.wait_for_file_to_appear(f)
-        start = time.time()
-        while os.stat(f).st_size >= sz:
-            time.sleep(.01)
-            if time.time() - start > 15:
-                self.fail("should have made it below that size by now")
-
-
-    def wait_for_file_contents_to_contain(self, f, val):
-
-        self.wait_for_file_to_appear(f)
-        contents = self.file_contents(f)
-        start = time.time()
-
-        while val not in contents:
-            if time.time() - start > 15:
-                self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
-            time.sleep(1)
-            contents = self.file_contents(f)
-
-    def file_contents(self, f):
-        open1 = open(f, encoding="utf-8")
-        contents = open1.read()
-        open1.close()
-        return contents
-
-    def wait_for_file_to_disappear(self, f):
-        start = time.time()
-        while os.path.exists(f):
-            if time.time() - start > 15:
-                self.fail("file " + f + " didn't disappear in 45 secs")
-            time.sleep(1)
-
-
-    def upload_file(self, filename, remote_path):
-        start = time.time()
-        f = open(filename, 'rb')
-        requests.put(remote_path, auth=(self.user, self.passwd), data=f, verify=False)
-        f.close()
+        self.end(self.process_a, self.test_sync_dir_a)
+        self.end(self.process_b, self.test_sync_dir_b)
 
 
     @timedtest
     def test_a_single_file_syncs(self):
+
+        test_start = time.time()
 
         p1, p2 = self.start_two_subsyncits()
         try:
@@ -274,11 +144,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end(p1, self.test_sync_dir_a)
             self.end(p2, self.test_sync_dir_b)
 
+        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        self.should_start_with(rows, 0, "1, output.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0,")
+
 
     @timedtest
     def test_a_changed_file_syncs_back(self):
 
         p1, p2 = self.start_two_subsyncits()
+
+        test_start = time.time()
 
         time.sleep(2)
 
@@ -300,8 +175,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end(p2, self.test_sync_dir_b)
 
 
+        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        self.should_start_with(rows, 0, "1, output.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36,")
+
     @timedtest
     def test_a_hidden_files_dont_get_put_into_svn(self):
+
+        test_start = time.time()
 
         dir = self.test_sync_dir_a
 
@@ -341,6 +221,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end(p1, self.test_sync_dir_a)
 
+        print(self.get_db_rows(test_start, self.test_sync_dir_a))
+
     @timedtest
     def test_files_with_special_characters_make_it_to_svn_and_back(self):
 
@@ -349,6 +231,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         # or on the way back over HTTP into the file system. No matter - the most important representation of file name
         # is in the file system, and we only require consistent GET/PUT from/to that.
 
+#        test_start = time.time()
 
         p1 = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
@@ -394,6 +277,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         finally:
             self.end(p1, self.test_sync_dir_a)
+
+        # files_table = self.get_db_rows(test_start, self.test_sync_dir_a)
+        #
+        # print(str(files_table.all()))
+
 
 
     @timedtest
@@ -750,6 +638,171 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def expect204(self, commandOutput):
         self.assertEqual("<Response [204]>", str(commandOutput))
+
+
+    def should_start_with(self, rows, row, start_with_this):
+        self.assertTrue(rows[row].startswith(start_with_this), msg="Was actually: " + rows[row])
+
+    def get_db_rows(self, test_start, sync_dir):
+        db_ = self.db_dir_a + os.sep + "subsyncit.db"
+        size = 0
+        files_table = None
+        start = time.time()
+
+        # Need to wait for the other process to release the TinyDB database file
+        while size != 1:
+            db = TinyDB(db_)
+            files_table = db.table('files')
+            size = len(files_table.all())
+            if time.time() - start > 45:
+                self.fail("should have been able to grab DB")
+
+        lowest_rv = 99999
+        for row in files_table.all():
+            if row['RV'] < lowest_rv:
+                lowest_rv = row['RV']
+
+        # Revisions are normalized down to 1,2,3,4 when they actually might be 12,13,14 in the repo
+
+        rv = ""
+        for row in files_table.all():
+            rv += str(row['RV'] - lowest_rv + 1) + ", " + row['RFN'] + ", " + row['RS']+ ", " + row['LS']+ ", " + str(round((row['ST'] - os.stat(sync_dir + row['RFN']).st_size - test_start) * 1000)) \
+                  + "\n"
+
+        return sorted(rv.splitlines())
+
+    @classmethod
+    def kill_docker_container(cls, wait):
+        try:
+            ctr = cls.client.containers.get("subsyncitTests")
+            ctr.stop()
+            if wait:
+                status = 200
+                while status == 200:
+                    status = -1
+                    try:
+                        get = requests.get("http://127.0.0.1:8099")
+                        status = get.status_code
+                    except:
+                        pass
+                while cls.client.containers.get("subsyncitTests"):
+                    time.sleep(0.2)
+                    pass  # keep looping until there's an exception
+        except NotFound:
+            pass
+
+
+    def end(self, p, dir):
+        if p is not None:
+            self.signal_stop_of_subsyncIt(dir)
+
+    def reset_test_dir(self, dirname):
+        if os.path.exists(dirname):
+            shutil.rmtree(dirname)
+        os.makedirs(dirname)
+
+
+    def signal_stop_of_subsyncIt(self, dir_):
+        if not os.path.exists(dir_):
+            os.makedirs(dir_)
+
+        stop_ = dir_ + ".subsyncit.stop"
+        with open(stop_, "w") as text_file:
+            text_file.write("anything")
+            print("STOPPING " + dir_)
+
+    def wait_for_file_to_appear(self, op2):
+        start = time.time()
+        while not os.path.exists(op2):
+            if time.time() - start > 15:
+                self.fail("no sync'd file")
+            time.sleep(.01)
+
+
+    def wait_for_URL_to_appear(self, url):
+
+        status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
+        while status == 404:
+            start = time.time()
+            if time.time() - start > 15:
+                break
+            time.sleep(.1)
+            status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
+
+        if status != 200:
+            self.fail("URL " + url + " should have appeared, but it did not (status code: " + str(status) + ")")
+
+
+    def process_output(self, line):
+        print(line)
+        self.line += ("\n" + line)
+
+
+    def start_two_subsyncits(self):
+        p1 = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
+        p2 = self.start_subsyncit(self.svn_url, self.test_sync_dir_b)
+        return p1, p2
+
+
+    def start_subsyncit(self, svn_repo, dir, passwd=None):
+        if passwd is None:
+            passwd = self.passwd
+        print("Subsyncit start. URL: " + svn_repo + ", dir: " + dir)
+        python = sh.python3("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
+                           "--sleep-secs-between-polling", "1",
+                           '--passwd', passwd, _out=self.process_output,
+                           _err_to_out=True, _bg=True)
+        return python
+
+
+    def wait_for_file_contents_to_be_sized_above_or_eq_too(self, f, sz):
+        self.wait_for_file_to_appear(f)
+        start = time.time()
+        while os.stat(f).st_size < sz:
+            time.sleep(.01)
+            if time.time() - start > 15:
+                self.fail("should have made it above that size by now")
+
+
+    def wait_for_file_contents_to_be_sized_below(self, f, sz):
+        self.wait_for_file_to_appear(f)
+        start = time.time()
+        while os.stat(f).st_size >= sz:
+            time.sleep(.01)
+            if time.time() - start > 15:
+                self.fail("should have made it below that size by now")
+
+
+    def wait_for_file_contents_to_contain(self, f, val):
+
+        self.wait_for_file_to_appear(f)
+        contents = self.file_contents(f)
+        start = time.time()
+
+        while val not in contents:
+            if time.time() - start > 15:
+                self.assertIn(val, contents, "file " + f + " should have contained '" + val + "' but was '" + contents + "' instead.")
+            time.sleep(1)
+            contents = self.file_contents(f)
+
+    def file_contents(self, f):
+        open1 = open(f, encoding="utf-8")
+        contents = open1.read()
+        open1.close()
+        return contents
+
+    def wait_for_file_to_disappear(self, f):
+        start = time.time()
+        while os.path.exists(f):
+            if time.time() - start > 15:
+                self.fail("file " + f + " didn't disappear in 45 secs")
+            time.sleep(1)
+
+
+    def upload_file(self, filename, remote_path):
+        f = open(filename, 'rb')
+        requests.put(remote_path, auth=(self.user, self.passwd), data=f, verify=False)
+        f.close()
 
 
 if __name__ == '__main__':

@@ -847,7 +847,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                 not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
 
             if put_count > 0:
-                speed = "taking " + english_duration(round(time.time() - start/put_count, 2)) + " each "
+                speed = "taking " + english_duration(round((time.time() - start)/put_count, 2)) + " each "
             else:
                 speed = " "
 

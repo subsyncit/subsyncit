@@ -1296,6 +1296,8 @@ def main(argv):
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
 
+            # recreating this per iteration is good given use could be changing connection to the
+            # internet as they move around (office, home, wifi, 3G)
             requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \

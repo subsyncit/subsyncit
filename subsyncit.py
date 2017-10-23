@@ -149,11 +149,11 @@ class MyRequestsTracer():
                 debug("Requests.HEAD: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
-    def propfind(self, arg0, headers=None):
+    def propfind(self, arg0, data, headers=None):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request("PROPFIND", arg0, data=PROPFIND, headers=headers)
+            request = self.delegate.request("PROPFIND", arg0, data=data, headers=headers)
             status = request.status_code
             return request
         finally:
@@ -586,11 +586,19 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
 
     path = "!svn/rvr/" + youngest_rev + "/" + baseline_relative_path
     url = remote_subversion_directory.replace(repo_parent_path + baseline_relative_path, repo_parent_path + path, 1)
-    report = requests_session.report(url + "/" + esc(relative_file_name), youngest_rev)
+    # report = requests_session.propfind(url + "/" + esc(relative_file_name), youngest_rev)
+    propfind = requests_session.propfind(url,
+                                data='<?xml version="1.0" encoding="utf-8"?>'
+                                     '<propfind xmlns="DAV:">'
+                                     '<prop>'
+                                     '<version-name/>'
+                                     '</prop>'
+                                     '</propfind>')
 
-    content = report.content.decode("utf-8")
+    content = propfind.content.decode("utf-8")
+    print("report sc", url, propfind.status_code)
 
-    if report.status_code != 200:
+    if propfind.status_code != 207:
         raise UnexpectedStatusCode(options.status_code)
 
     return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
@@ -639,7 +647,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
 
                 else:
                     (RV, sha1, baseline_relative_path_not_used) \
-                        = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir, must_be_there=True)
+                        = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
 
                     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
 
@@ -749,7 +757,7 @@ def get_relative_file_name(full_path, absolute_local_root_path):
 
 def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path):
 
-    propfind = requests_session.propfind(url, headers={'Depth': 'infinity'})
+    propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': 'infinity'})
 
     output = propfind.content.decode('utf-8')
 
@@ -908,7 +916,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, relative_file
 #         relative_file_name = row['RFN']
 #         if row['RS'] :
 #             update_instruction_in_table(files_table, None, relative_file_name)
-#         (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir, must_be_there=True)
+#         (revn, sha1, baseline_relative_path_not_used) = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
 #         update_row_revision(files_table, relative_file_name, rev=revn)
 #         update_instruction_in_table(files_table, None, relative_file_name)
 #
@@ -953,7 +961,7 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
 
     my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - end")
 
-def get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir, must_be_there = False):
+def get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir):
     ver = 0
     sha1 = None
     baseline_relative_path = ""
@@ -962,7 +970,7 @@ def get_remote_subversion_server_revision_for(requests_session, remote_subversio
         url = remote_subversion_directory + esc(relative_file_name).replace("\\", "/")
         if url.endswith("/"):
             url = url[:-1]
-        propfind = requests_session.propfind(url, headers={'Depth': '0'})
+        propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': '0'})
         if 200 <= propfind.status_code <= 299:
             content = propfind.content.decode('utf-8')
 
@@ -1305,7 +1313,7 @@ def main(argv):
             requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
-                get_remote_subversion_server_revision_for(requests_session, args.remote_subversion_directory, "", db_dir, must_be_there=True) # root
+                get_remote_subversion_server_revision_for(requests_session, args.remote_subversion_directory, "", db_dir) # root
 
             to_add_chg_or_del = 0
 

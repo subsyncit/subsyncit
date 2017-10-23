@@ -594,42 +594,39 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         test_start = time.time()
 
         # starting revision varies depending on how many tests are being run.
-        sr = self.repo_rev_for("")
+        sr = self.repo_rev_for("", 2)
 
         self.expect201(requests.request('MKCOL', self.svn_url + "fred/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
 
-        def get_rev_summary_for_root_and_three_subdirectories(sr):
-            return "<root> : " + str(self.repo_rev_for("") - sr) + ", " + str(self.directory_revision_for("") - sr) + "\n" \
-                   + "fred/ : " + str(self.repo_rev_for("fred/") - sr) + ", " + str(self.directory_revision_for("fred/") - sr) + "\n" \
-                   + "wilma/ : " + str(self.repo_rev_for("wilma/") - sr) + ", " + str(self.directory_revision_for("wilma/") - sr) + "\n" \
-                   + "barney/ : " + str(self.repo_rev_for("barney/") - sr) + ", " + str(self.directory_revision_for("barney/") - sr) + "\n"
-
         self.assertEquals(self.no_leading_spaces(
-            """<root> : 3, 3
-               fred/ : 3, 1
-               wilma/ : 3, 2
-               barney/ : 3, 3
+            """<root> : 5, 5
+               fred/ : 5, 3
+               wilma/ : 5, 4
+               barney/ : 5, 5
                """),
-            get_rev_summary_for_root_and_three_subdirectories(sr))
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
 
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/bambam", auth=(self.user, self.passwd), verify=False))
 
         # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
         self.assertEquals(self.no_leading_spaces(
-            """<root> : 4, 4
-               fred/ : 4, 1
-               wilma/ : 4, 4
-               barney/ : 4, 3
+            """<root> : 6, 6
+               fred/ : 6, 3
+               wilma/ : 6, 6
+               wilma/bambam : ?, 6
+               barney/ : 6, 5
                """),
-            get_rev_summary_for_root_and_three_subdirectories(sr))
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
 
 
     @timedtest
-    def true_merkle_test(self):
+    def test_that_subsynct_can_collect_the_merkel_esque_revisions_from_subversion(self):
 
         test_start = time.time()
+
+        sr = self.repo_rev_for("", 2)
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
@@ -650,14 +647,45 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a.wait()
 
+
+        # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
+        self.assertEquals(self.no_leading_spaces(
+            """<root> : 6, 6
+               fred/ : 6, 3
+               wilma/ : 6, 6
+               wilma/bambam : ?, 6
+               barney/ : 6, 5
+               """),
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
+
+
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
         print(str(rows))
+        # ['01, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42, 1688', '
+        # 07, barney, None, None, -1508766913312', '
+        # 07, fred, None, None, -1508766913312', '
+        # 07, wilma, None, None,
         self.should_start_with(rows, 0, "01, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
         self.should_start_with(rows, 1, "04, fred, None, None,")
         self.should_start_with(rows, 2, "06, barney, None, None,")
         self.should_start_with(rows, 3, "07, wilma, None, None,")
 
     # ======================================================================================================
+
+    def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self, sr):
+
+        bambam = ""
+        try:
+            bambam = "wilma/bambam : " + str(self.repo_rev_for("wilma/bambam", sr)) + ", " + str(self.directory_revision_for("wilma/bambam") - sr) + "\n"
+        except AssertionError:
+            pass
+
+        return "<root> : " + str(self.repo_rev_for("", sr)) + ", " + str(self.directory_revision_for("") - sr) + "\n" \
+               + "fred/ : " + str(self.repo_rev_for("fred/", sr)) + ", " + str(self.directory_revision_for("fred/") - sr) + "\n" \
+               + "wilma/ : " + str(self.repo_rev_for("wilma/", sr)) + ", " + str(self.directory_revision_for("wilma/") - sr) + "\n" \
+               + bambam \
+               + "barney/ : " + str(self.repo_rev_for("barney/", sr)) + ", " + str(self.directory_revision_for("barney/") - sr) + "\n"
+
 
     def no_leading_spaces(self, string):
         c = [item.strip() for item in string.splitlines()]
@@ -686,10 +714,14 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         content = propfind.content.decode("utf-8")
         return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
 
-    def repo_rev_for(self, dir):
+    def repo_rev_for(self, dir, offset):
         get = requests.get(self.svn_url + dir, auth=(self.user, self.passwd), verify=False)
         self.assertEqual(get.status_code, 200)
-        return int(str([line for line in get.text.splitlines() if 'testrepo - Revision' in line]).split(" ")[3][:-1])
+        print(">>>> " + get.text)
+        try:
+            return int(str([line for line in get.text.splitlines() if 'testrepo - Revision' in line]).split(" ")[3][:-1]) - offset
+        except IndexError:
+            return "?"
 
 
     def make_a_big_random_file(self, filename, size):

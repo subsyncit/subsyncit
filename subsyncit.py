@@ -1255,11 +1255,6 @@ def main(argv):
     db = TinyDB(db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
     files_table  = MyTinyDBTrace(db.table('files'))
 
-    last_scanned_path  = db_dir + os.sep + "last_scanned"
-    if not os.path.exists(last_scanned_path):
-        with open(last_scanned_path, "w") as last_scanned_f:
-            last_scanned_f.write("0")
-
     with open(db_dir + os.sep + "INFO.TXT", "w") as text_file:
         text_file.write(args.absolute_local_root_path + "is the Subsyncit path that this pertains to")
 
@@ -1292,6 +1287,7 @@ def main(argv):
 
     iteration = 0
     excluded_filename_patterns = ["hi*"]
+    last_scanned = 0
 
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
@@ -1317,17 +1313,13 @@ def main(argv):
                             notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
 
                         scan_start_time = int(time.time())
-                        with open(last_scanned_path, "r") as last_scanned_f:
-                            read = last_scanned_f.read().strip()
 
-                            last_scanned = int(read)
+                        last_scanned = get_last_scanned_if_needed(db_dir, last_scanned)
 
                         to_add_chg_or_del =  enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
                                            + enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, last_scanned)
 
-                        if to_add_chg_or_del == 0:
-                            with open(last_scanned_path, "w") as last_scanned_f:
-                                last_scanned_f.write(str(scan_start_time))
+                        update_last_scanned_if_needed(db_dir, scan_start_time, to_add_chg_or_del)
 
                         # Act on existing instructions (if any)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
@@ -1387,6 +1379,25 @@ def main(argv):
     if debug:
         print_rows(files_table)
 
+
+def update_last_scanned_if_needed(db_dir, scan_start_time, to_add_chg_or_del):
+    if to_add_chg_or_del == 0:
+        with open(db_dir + os.sep + "last_scanned", "w") as last_scanned_f:
+            last_scanned_f.write(str(scan_start_time))
+
+
+def get_last_scanned_if_needed(db_dir, last_scanned):
+    if last_scanned > 0:
+        return last_scanned
+    last_scanned_path = db_dir + os.sep + "last_scanned"
+    if not os.path.exists(last_scanned_path):
+        with open(last_scanned_path, "w") as last_scanned_f:
+            last_scanned_f.write("0")
+    with open(last_scanned_path, "r") as last_scanned_f:
+        read = last_scanned_f.read().strip()
+
+        last_scanned = int(read)
+    return last_scanned
 
 
 if __name__ == "__main__":

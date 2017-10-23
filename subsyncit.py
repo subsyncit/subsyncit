@@ -44,7 +44,7 @@ import sys
 import time
 from os.path import dirname, splitext
 from time import strftime
-
+import threading
 import requests
 import requests.packages.urllib3
 from boltons.setutils import IndexedSet
@@ -347,16 +347,8 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def on_created(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
-        if relative_file_name == ".subsyncit.stop":
-            self.file_system_watcher.stop()
-            self.is_shutting_down.append(True)
-            try:
-                self.file_system_watcher.join()
-                os.remove(event.src_path)
-            except RuntimeError:
-                pass
-            except OSError:
-                pass
+        if relative_file_name == "subsyncit.stop":
+            self.stop_subsyncit(event)
             return
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
@@ -364,15 +356,30 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         # print("on_add: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "add_" + ("dir" if event.is_directory else "file")))
 
+    def stop_subsyncit(self, event):
+        self.file_system_watcher.stop()
+        self.is_shutting_down.append(True)
+        try:
+            self.file_system_watcher.join()
+            os.remove(event.src_path)
+        except RuntimeError:
+            pass
+        except OSError:
+            pass
+
     def on_deleted(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        #print("on_del: " + relative_file_name)
+        # print("on_del: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     def on_modified(self, event):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
+        if relative_file_name == "subsyncit.stop":
+            self.stop_subsyncit(event)
+            #threading.thread.exit()
+            return
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
@@ -391,6 +398,7 @@ def should_be_excluded(relative_file_name, excluded_filename_patterns):
     basename = os.path.basename(relative_file_name)
 
     if basename.startswith(".") \
+           or relative_file_name == "subsyncit.stop" \
            or len(relative_file_name) == 0 \
            or ".clash_" in relative_file_name:
         return True
@@ -584,11 +592,11 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
 
     my_trace(2,  " ---> perform_GETs_per_instructions - start")
     more_to_do = True
-    group = 0
+    batch = 0
 
     # Batches of 100 so that here's intermediate reporting.
     while more_to_do:
-        group += 1
+        batch += 1
         more_to_do = False
         start = time.time()
         num_rows = 0
@@ -650,7 +658,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 update_instruction_in_table(files_table, None, relative_file_name)
         finally:
 
-            section_end(num_rows > 0,  "Group " + str(group) + " of"
+            section_end(num_rows > 0,  "Batch " + str(batch) + " of"
                      + ": GETs from Subversion server took %s: " + str(file_count)
                      + " files, and " + str(num_rows - file_count)
                      + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec.", start)
@@ -780,11 +788,11 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
 
     possible_clash_encountered = False
     more_to_do = True
-    group = 0
+    batch = 0
 
     # Batches of 100 so that here's intermediate reporting.
     while more_to_do:
-        group += 1
+        batch += 1
         more_to_do = False
         start = time.time()
         num_rows = 0
@@ -838,7 +846,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                         print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
                 if put_count == 100:
                     more_to_do = True
-                    group += 1
+                    batch += 1
                     break
         finally:
 
@@ -855,7 +863,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
             if dirs_made > 0:
                 dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
 
-            section_end(num_rows > 0 or put_count > 0,  "Group " + str(group) + " of"
+            section_end(num_rows > 0 or put_count > 0,  "Batch " + str(batch) + " of"
                  + ": PUTs on Subversion server took %s, " + str(put_count)
                  + " PUT files, " + not_actually_changed_blurb
                  + speed + dirs_made_blurb + ".", start)
@@ -1133,7 +1141,7 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
 def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
     if not file_system_watcher.is_alive():
         return False
-    fn = absolute_local_root_path + ".subsyncit.stop"
+    fn = absolute_local_root_path + "subsyncit.stop"
     if os.path.isfile(fn):
         try:
             file_system_watcher.stop()
@@ -1211,7 +1219,7 @@ def main(argv):
     if not args.absolute_local_root_path.endswith(os.sep):
         args.absolute_local_root_path += os.sep
 
-    fn = args.absolute_local_root_path + os.sep + ".subsyncit.stop"
+    fn = args.absolute_local_root_path + os.sep + "subsyncit.stop"
     if os.path.isfile(fn):
         try:
             os.remove(fn)
@@ -1270,6 +1278,7 @@ def main(argv):
 
     notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down)
     file_system_watcher.schedule(notification_handler, args.absolute_local_root_path, recursive=True)
+    file_system_watcher.daemon = True
     file_system_watcher.start()
 
     iteration = 0
@@ -1330,23 +1339,24 @@ def main(argv):
         print("CTRL-C, Shutting down...")
         pass
 
+    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+
     try:
         file_system_watcher.stop()
     except KeyError:
         pass
-
-    db.close()
-
-    is_shutting_down.append(True)
     try:
         file_system_watcher.join()
     except RuntimeError:
         pass
 
+    db.close()
+
     debug = False
 
     if debug:
         print_rows(files_table)
+
 
 
 if __name__ == "__main__":

@@ -449,7 +449,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a = self.start_subsyncit("https://example.com/", self.test_sync_dir_a, passwd="dontLeakRealPasswordToExampleDotCom")
         try:
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + ".subsyncit.err", "Cannot attach to remote")
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "Cannot attach to remote")
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
@@ -459,7 +459,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + ".subsyncit.err", "Cannot attach to remote") # and more
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "Cannot attach to remote") # and more
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
@@ -470,7 +470,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         process_a = self.start_subsyncit("https://localhost:34456/", self.test_sync_dir_a)
         try:
             time.sleep(2)
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + ".subsyncit.err", " Failed to establish a new connection")
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", " Failed to establish a new connection")
         finally:
             self.end(process_a, self.test_sync_dir_a)
 

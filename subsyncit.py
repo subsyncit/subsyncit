@@ -316,6 +316,12 @@ class UnexpectedStatusCode(Exception):
         self.message = " status code:" +  str(status_code)
 
 
+class NoConnection(Exception):
+
+    def __init__(self, msg):
+        self.message = msg
+
+
 class NotPUTting(Exception):
     pass
 
@@ -970,14 +976,16 @@ def get_remote_subversion_server_revision_for(requests_session, remote_subversio
                         sha1 = None
                     else:
                         sha1=line[line.index(">")+1:line.index("<", 3)]
-            # debug(relative_file_name + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1) + " / " + str(ver))
+        # debug(relative_file_name + ": PROPFIND " + str(propfind.status_code) + " / " + str(sha1) + " / " + str(ver) + " " + url)
+        elif propfind.status_code == 401:
+            raise NoConnection(remote_subversion_directory + " is saying that the user is not authorized")
+        elif propfind.status_code == 405:
+            raise NoConnection(remote_subversion_directory + " is not a website that maps subversion to that URL")
         elif 400 <= propfind.status_code <= 499:
-            content = "Cannot attach to remote Subversion server. Maybe not Subversion+Apache? Or wrong userId and/or password? Or wrong subdirectory within the server? Status code: " + str(
-                propfind.status_code)
+            raise NoConnection("Cannot attach to remote Subversion server. Maybe not Subversion+Apache? Or wrong userId and/or password? Or wrong subdirectory within the server? Status code: " + str(
+                propfind.status_code) + ", content=" + propfind.text)
         else:
-            content = "PROPFIND status: " + str(propfind.status_code) + " for: " + url
-        if must_be_there and ver == 0:
-            write_error(db_dir, content)
+            raise NoConnection("Unexpected web error " + str(propfind.status_code) + " " + propfind.text)
     except requests.packages.urllib3.exceptions.NewConnectionError as e:
         write_error(db_dir, "NewConnectionError: "+ repr(e))
     except requests.exceptions.ConnectionError as e:
@@ -1213,9 +1221,12 @@ def main(argv):
     args = parser.parse_args(argv[1:])
 
     if not args.passwd:
-        passwd = getpass.getpass(prompt="Subverison password for " + args.user + ": ")
+        auth = (args.user, getpass.getpass(prompt="Subverison password for " + args.user + ": "))
+
+    elif args.passwd == "*NONE":
+        auth = None
     else:
-        passwd = args.passwd
+        auth = (args.user, args.passwd)
 
     args.absolute_local_root_path = os.path.abspath(args.local_root_path.replace("/", os.sep) \
                          .replace("\\", os.sep).replace(os.sep+os.sep, os.sep))
@@ -1230,13 +1241,10 @@ def main(argv):
         except OSError:
             pass
 
-
     if not str(args.remote_subversion_directory).endswith("/"):
         args.remote_subversion_directory += "/"
 
     verifySetting = True
-
-    auth = (args.user, passwd)
 
     if not args.verify_ssl_cert:
         requests.packages.urllib3.disable_warnings()
@@ -1247,7 +1255,7 @@ def main(argv):
         os.mkdir(subsyncit_settings_dir)
     make_hidden_on_windows_too(subsyncit_settings_dir)
 
-    db_dir = subsyncit_settings_dir + os.sep + args.absolute_local_root_path.replace("/","%47").replace(":","%58").replace("\\","%92")
+    db_dir = subsyncit_settings_dir + os.sep + args.absolute_local_root_path.replace("/","%47").replace(":","%58").replace("\\","%92") + "/"
 
     if not os.path.exists(db_dir):
         os.mkdir(db_dir)
@@ -1357,9 +1365,13 @@ def main(argv):
                 sleep_a_little(args.sleep_secs)
 
             iteration += 1
+    except NoConnection as e:
+        print ("ERROR " + db_dir)
+        write_error(db_dir, e.message)
+        print("Can't connect " + e.message)
+
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
-        pass
 
     transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
 

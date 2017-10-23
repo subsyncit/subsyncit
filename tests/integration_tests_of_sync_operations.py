@@ -114,8 +114,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.rel_dir_b = "integrationTests/test_" + testNum + "b/"
         self.test_sync_dir_b = str(sh.pwd()).strip('\n') + self.rel_dir_b
 
-        self.db_dir_a = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_a.replace("/", "%47").replace(":", "%58").replace("\\", "%92")
-        self.db_dir_b = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_b.replace("/", "%47").replace(":", "%58").replace("\\", "%92")
+        self.db_dir_a = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_a.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
+        self.db_dir_b = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_b.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
 
         self.reset_test_dir(self.test_sync_dir_a)
         self.reset_test_dir(self.db_dir_a)
@@ -447,9 +447,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_cant_start_on_a_non_svn_dav_server(self):
 
-        process_a = self.start_subsyncit("https://example.com/", self.test_sync_dir_a, passwd="dontLeakRealPasswordToExampleDotCom")
+        process_a = self.start_subsyncit_without_user_and_password("http://example.com/", self.test_sync_dir_a)
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "Cannot attach to remote")
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "http://example.com/ is not a website that maps subversion to that URL")
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
@@ -459,7 +459,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "Cannot attach to remote") # and more
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "http://127.0.0.1:8099/svn/testrepo/integrationTests/") # start
+            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", " is saying that the user is not authorized") # end
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
@@ -784,11 +785,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         with open(dir + "subsyncit.stop", "w") as text_file:
             text_file.write("anything")
 
-    def wait_for_file_to_appear(self, the_process):
+    def wait_for_file_to_appear(self, file_should_appear):
         start = time.time()
-        while not os.path.exists(the_process):
+        while not os.path.exists(file_should_appear):
             if time.time() - start > 15:
-                self.fail("no sync'd file")
+                self.fail(file_should_appear + " shouldhave appeared but did not")
             time.sleep(.01)
 
 
@@ -824,6 +825,15 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         python = sh.python3("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
                            "--sleep-secs-between-polling", "1",
                            '--passwd', passwd, _out=self.process_output,
+                           _err_to_out=True, _bg=True)
+        return python
+
+
+    def start_subsyncit_without_user_and_password(self, svn_repo, dir):
+        print("Subsyncit start. URL: " + svn_repo + ", dir: " + dir)
+        python = sh.python3("subsyncit.py", svn_repo, dir, None, '--no-verify-ssl-cert',
+                           "--sleep-secs-between-polling", "1",
+                           '--passwd', "*NONE", _out=self.process_output,
                            _err_to_out=True, _bg=True)
         return python
 

@@ -20,6 +20,7 @@
 
 import argparse
 import copy
+import json
 import os
 import copy
 import time
@@ -464,7 +465,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
     @timedtest
-    def test_cant_start_on_a_down_server(self):
+    def test_cant_start_on_a_server_that_is_down(self):
 
         process_a = self.start_subsyncit("https://localhost:34456/", self.test_sync_dir_a)
         try:
@@ -472,6 +473,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_contents_to_contain(self.test_sync_dir_a + ".subsyncit.err", " Failed to establish a new connection")
         finally:
             self.end(process_a, self.test_sync_dir_a)
+
+        process_a.wait()
+
+        status = json.loads(self.file_contents(self.db_dir_a + "status.json"))
+
+        self.assertEquals(status['online'], False)
 
 
     @timedtest

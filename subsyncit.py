@@ -38,6 +38,7 @@ import datetime
 import getpass
 # import sqlite3
 import hashlib
+import json
 import os
 import re
 import sys
@@ -77,7 +78,7 @@ def debug(message):
 def section_end(should_prnt, message, start):
     duration = time.time() - start
     if should_prnt or duration > 1:
-        debug(("SECTION " + message) %english_duration(duration))
+        debug(("[SECTION] " + message) %english_duration(duration))
 
 
 def my_trace(lvl, message):
@@ -1281,6 +1282,11 @@ def main(argv):
     file_system_watcher.daemon = True
     file_system_watcher.start()
 
+    status = {
+        "online": False
+    }
+    last_status_str = ""
+
     iteration = 0
     excluded_filename_patterns = ["hi*"]
 
@@ -1291,49 +1297,61 @@ def main(argv):
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
                 get_remote_subversion_server_revision_for(requests_session, args.remote_subversion_directory, "", args.absolute_local_root_path, must_be_there=True) # root
-            if root_revision_on_remote_svn_repo > 0:
-                repo_parent_path = get_repo_parent_path(requests_session, args.remote_subversion_directory)
 
             to_add_chg_or_del = 0
-            if root_revision_on_remote_svn_repo != None:
-                if iteration == 0: # At boot time only for now
-                    excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_directory)
-                    notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
 
-                scan_start_time = int(time.time())
-                with open(last_scanned_path, "r") as last_scanned_f:
-                    read = last_scanned_f.read().strip()
+            if root_revision_on_remote_svn_repo > 0:
+                status['online'] = True
+                repo_parent_path = get_repo_parent_path(requests_session, args.remote_subversion_directory)
 
-                    last_scanned = int(read)
+                if root_revision_on_remote_svn_repo != None:
+                    if iteration == 0: # At boot time only for now
+                        excluded_filename_patterns = get_excluded_filename_patterns(requests_session, args.remote_subversion_directory)
+                        notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
 
-                to_add_chg_or_del =  enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
-                                   + enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, last_scanned)
+                    scan_start_time = int(time.time())
+                    with open(last_scanned_path, "r") as last_scanned_f:
+                        read = last_scanned_f.read().strip()
 
-                if to_add_chg_or_del == 0:
-                    with open(last_scanned_path, "w") as last_scanned_f:
-                        last_scanned_f.write(str(scan_start_time))
+                        last_scanned = int(read)
 
-                # Act on existing instructions (if any)
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path, repo_parent_path)
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_directory, baseline_relative_path, args.absolute_local_root_path, repo_parent_path)
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, args.remote_subversion_directory)
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                # Actions indicated by Subversion server next, only if root revision is different
-                if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
-                    create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                 svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path))
-                    # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path)
-                    last_root_revision = root_revision_on_remote_svn_repo
-                transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    to_add_chg_or_del =  enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
+                                       + enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, last_scanned)
+
+                    if to_add_chg_or_del == 0:
+                        with open(last_scanned_path, "w") as last_scanned_f:
+                            last_scanned_f.write(str(scan_start_time))
+
+                    # Act on existing instructions (if any)
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path, repo_parent_path)
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, args.remote_subversion_directory, baseline_relative_path, args.absolute_local_root_path, repo_parent_path)
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, args.remote_subversion_directory)
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                    # Actions indicated by Subversion server next, only if root revision is different
+                    if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
+                        create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
+                                     svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path))
+                        # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path)
+                        last_root_revision = root_revision_on_remote_svn_repo
+                    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
+                else:
+                    status['online'] = False
+
+            status_str = str(status)
+            if status_str != last_status_str:
+                last_status_str= status_str
+                status_file = db_dir + "status.json"
+                with open(status_file, "w") as text_file:
+                    text_file.write(json.dumps(status))
 
             if to_add_chg_or_del < 200:
                 sleep_a_little(args.sleep_secs)
-#            print_rows(files_table)
+
             iteration += 1
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")

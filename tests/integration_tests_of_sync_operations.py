@@ -477,10 +477,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a.wait()
 
-        status = json.loads(self.file_contents(self.db_dir_a + "status.json"))
-
-        self.assertEquals(status['online'], False)
-
+        self.assertEquals(self.get_status_dict()['online'], False)
 
     @timedtest
     def test_an_excluded_filename_patterns_is_not_pushed_up(self):
@@ -593,40 +590,35 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         test_start = time.time()
 
-        # starting revision varies depending on how many tests are being run.
-        sr = self.repo_rev_for("", 2)
-
         self.expect201(requests.request('MKCOL', self.svn_url + "fred/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
 
         self.assertEquals(self.no_leading_spaces(
-            """<root> : 5, 5
-               fred/ : 5, 3
-               wilma/ : 5, 4
-               barney/ : 5, 5
+            """<root> : 03
+               fred/ : 01
+               wilma/ : 02
+               barney/ : 03
                """),
-            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/bambam", auth=(self.user, self.passwd), verify=False))
 
         # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
         self.assertEquals(self.no_leading_spaces(
-            """<root> : 6, 6
-               fred/ : 6, 3
-               wilma/ : 6, 6
-               wilma/bambam : ?, 6
-               barney/ : 6, 5
+            """<root> : 03
+               fred/ : 01
+               wilma/ : 03
+               wilma/bambam : 03
+               barney/ : 02
                """),
-            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
 
     @timedtest
     def test_that_subsynct_can_collect_the_merkel_esque_revisions_from_subversion(self):
 
         test_start = time.time()
-
-        sr = self.repo_rev_for("", 2)
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
@@ -642,49 +634,60 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_to_appear(self.test_sync_dir_a + "wilma/bambam")
             self.wait_for_file_to_appear(self.test_sync_dir_a + "barney")
 
+            time.sleep(1)
+
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
         process_a.wait()
 
-
         # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
         self.assertEquals(self.no_leading_spaces(
-            """<root> : 6, 6
-               fred/ : 6, 3
-               wilma/ : 6, 6
-               wilma/bambam : ?, 6
-               barney/ : 6, 5
+            """<root> : 03
+               fred/ : 01
+               wilma/ : 03
+               wilma/bambam : 03
+               barney/ : 02
                """),
-            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(sr))
+            self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
-        print(str(rows))
-        # ['01, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42, 1688', '
-        # 07, barney, None, None, -1508766913312', '
-        # 07, fred, None, None, -1508766913312', '
-        # 07, wilma, None, None,
-        self.should_start_with(rows, 0, "01, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
-        self.should_start_with(rows, 1, "04, fred, None, None,")
-        self.should_start_with(rows, 2, "06, barney, None, None,")
-        self.should_start_with(rows, 3, "07, wilma, None, None,")
+
+        self.should_start_with(rows, 0, "01, fred, None, None,")
+        self.should_start_with(rows, 1, "02, barney, None, None,")
+        self.should_start_with(rows, 2, "03, wilma, None, None,")
+        self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
 
     # ======================================================================================================
 
-    def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self, sr):
+    def get_status_dict(self):
+        return json.loads(self.file_contents(self.db_dir_a + "status.json"))
 
-        bambam = ""
+    def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self):
+
+        bambam = -1
         try:
-            bambam = "wilma/bambam : " + str(self.repo_rev_for("wilma/bambam", sr)) + ", " + str(self.directory_revision_for("wilma/bambam") - sr) + "\n"
+            bambam = self.directory_revision_for("wilma/bambam")
         except AssertionError:
             pass
 
-        return "<root> : " + str(self.repo_rev_for("", sr)) + ", " + str(self.directory_revision_for("") - sr) + "\n" \
-               + "fred/ : " + str(self.repo_rev_for("fred/", sr)) + ", " + str(self.directory_revision_for("fred/") - sr) + "\n" \
-               + "wilma/ : " + str(self.repo_rev_for("wilma/", sr)) + ", " + str(self.directory_revision_for("wilma/") - sr) + "\n" \
-               + bambam \
-               + "barney/ : " + str(self.repo_rev_for("barney/", sr)) + ", " + str(self.directory_revision_for("barney/") - sr) + "\n"
+        root = self.directory_revision_for("")
+        fred = self.directory_revision_for("fred/")
+        wilma = self.directory_revision_for("wilma/")
+        barney = self.directory_revision_for("barney/")
+
+        # Revisions are normalized down to 1,2,3,4 when they actually might be 12,13,14 in the repo
+        revisions = {root: 0, fred: 0, wilma: 0, barney: 0}
+        revision_map = {}
+        for ix, key in enumerate(sorted(revisions.keys())):
+            revision_map[key] = str(ix + 1).zfill(2)
+
+        return "<root> : " + revision_map[root] + "\n" \
+               + "fred/ : " + revision_map[fred] + "\n" \
+               + "wilma/ : " + revision_map[wilma] + "\n" \
+               + ("wilma/bambam : " + revision_map[bambam] + "\n" if bambam > 0 else "") \
+               + "barney/ : " + revision_map[barney] + "\n"
 
 
     def no_leading_spaces(self, string):
@@ -715,9 +718,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
 
     def repo_rev_for(self, dir, offset):
+        # from HTML
         get = requests.get(self.svn_url + dir, auth=(self.user, self.passwd), verify=False)
         self.assertEqual(get.status_code, 200)
-        print(">>>> " + get.text)
         try:
             return int(str([line for line in get.text.splitlines() if 'testrepo - Revision' in line]).split(" ")[3][:-1]) - offset
         except IndexError:
@@ -765,16 +768,18 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         db = TinyDB(db_)
         files_table = db.table('files')
 
-        lowest_rv = 99999
+        revisions = {}
         for row in files_table.all():
-            if row['RV'] < lowest_rv:
-                lowest_rv = row['RV']
+            revisions[row['RV']] = 0
 
         # Revisions are normalized down to 1,2,3,4 when they actually might be 12,13,14 in the repo
+        revision_map = {}
+        for ix, (key, value) in enumerate(revisions.items()):
+            revision_map[key] = ix + 1
 
         rv = ""
         for row in files_table.all():
-            rv += str(row['RV'] - lowest_rv + 1).zfill(2) + ", " + row['RFN'] + ", " + str(row['RS'])+ ", " + str(row['LS']) + ", " \
+            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['RFN'] + ", " + str(row['RS'])+ ", " + str(row['LS']) + ", " \
                   + str(round((row['ST'] - os.stat(sync_dir + row['RFN']).st_size - test_start) * 1000)) + "\n"
 
         return sorted(rv.splitlines())

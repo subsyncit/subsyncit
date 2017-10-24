@@ -497,7 +497,8 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
     return dirs_made
 
 
-def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server):
+def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server, requests_session,
+                                                                                              remote_subversion_directory, baseline_relative_path, repo_parent_path):
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
@@ -533,6 +534,8 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
         else:
             get_count += 1
             dir_or_file = "dir" if sha1 is None else "file"
+            if dir_or_file == '0':
+                rev = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
             upsert_row_in_table(files_table, relative_file_name, rev, dir_or_file, instruction=GET_FROM_SERVER)
 
     my_trace(2,  " done iterating over files_on_svn_server")
@@ -585,18 +588,16 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
     youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
     path = "!svn/rvr/" + youngest_rev + "/" + baseline_relative_path
-    url = remote_subversion_directory.replace(repo_parent_path + baseline_relative_path, repo_parent_path + path, 1)
-    # report = requests_session.propfind(url + "/" + esc(relative_file_name), youngest_rev)
-    propfind = requests_session.propfind(url,
-                                data='<?xml version="1.0" encoding="utf-8"?>'
-                                     '<propfind xmlns="DAV:">'
-                                     '<prop>'
-                                     '<version-name/>'
-                                     '</prop>'
-                                     '</propfind>')
+    propfind = requests_session.propfind(remote_subversion_directory.replace(repo_parent_path + baseline_relative_path, repo_parent_path + path, 1)
+                                         + relative_file_name,
+                                         data='<?xml version="1.0" encoding="utf-8"?>'
+                                              '<propfind xmlns="DAV:">'
+                                              '<prop>'
+                                              '<version-name/>'
+                                              '</prop>'
+                                              '</propfind>')
 
     content = propfind.content.decode("utf-8")
-    print("report sc", url, propfind.status_code)
 
     if propfind.status_code != 207:
         raise UnexpectedStatusCode(options.status_code)
@@ -646,12 +647,13 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                         Query().RFN == relative_file_name)
 
                 else:
-                    (RV, sha1, baseline_relative_path_not_used) \
+                    (rev, sha1, baseline_relative_path_not_used) \
                         = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
 
                     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
 
-                    # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code))
+                    # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code) + " " + str(rev))
+
                     # See https://github.com/requests/requests/issues/2155
                     # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
 
@@ -670,7 +672,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                     osstat = os.stat(abs_local_file_path)
                     size_ts = osstat.st_size + osstat.st_mtime
                     update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
-                    update_row_revision(files_table, relative_file_name, RV)
+                    update_row_revision(files_table, relative_file_name, rev)
                 update_instruction_in_table(files_table, None, relative_file_name)
         finally:
 
@@ -714,8 +716,7 @@ def prt_files_table_for(files_table, relative_file_name):
 
 
 def update_row_revision(files_table, relative_file_name, rev=0):
-    files_table.update({'RV': 0}, Query().RFN == relative_file_name)
-
+    files_table.update({'RV': rev}, Query().RFN == relative_file_name)
 
 def upsert_row_in_table(files_table, relative_file_name, rev, file_or_dir, instruction):
 
@@ -1351,7 +1352,8 @@ def main(argv):
                         # Actions indicated by Subversion server next, only if root revision is different
                         if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
                             create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                         svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path))
+                                         svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path), requests_session, args.remote_subversion_directory,
+                                                                                                                      baseline_relative_path, repo_parent_path)
                             # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, db_dir)
                             last_root_revision = root_revision_on_remote_svn_repo
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

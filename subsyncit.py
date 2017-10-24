@@ -491,7 +491,7 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
     # TODO has it changed on server
     with open(abs_local_file_path, "rb") as f:
         put = requests_session.put(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), data=f.read())
-        output = put.content.decode('utf-8')
+        output = put.text
         if put.status_code != 201 and put.status_code != 204:
             raise NotPUTtingAsTheServerObjected(put.status_code, output)
     return dirs_made
@@ -760,7 +760,7 @@ def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path)
 
     propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': 'infinity'})
 
-    output = propfind.content.decode('utf-8')
+    output = propfind.text
 
     if "PROPFIND requests with a Depth of \"infinity\"" in output:
         print("'DavDepthInfinity on' needs to be enabled for the Apache instance on " \
@@ -939,7 +939,7 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
     for row in rows:
         rfn = row['RFN']
         requests_delete = requests_session.delete(remote_subversion_directory + esc(rfn).replace(os.sep, "/"))
-        output = requests_delete.content.decode('utf-8')
+        output = requests_delete.text
         # debug(row['RFN'] + ": DELETE " + str(requests_delete.status_code))
         if row['F'] == 1:  # F
             files_deleted += 1
@@ -973,7 +973,7 @@ def get_remote_subversion_server_revision_for(requests_session, remote_subversio
             url = url[:-1]
         propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': '0'})
         if 200 <= propfind.status_code <= 299:
-            content = propfind.content.decode('utf-8')
+            content = propfind.text
 
             for line in content.splitlines():
                 if ":baseline-relative-path" in line and "baseline-relative-path/>" not in line:
@@ -1180,7 +1180,7 @@ def get_excluded_filename_patterns(requests_session, remote_subversion_directory
     try:
         get = requests_session.get(remote_subversion_directory + ".subsyncit-excluded-filename-patterns")
         if (get.status_code == 200):
-            lines = get.content.decode('utf-8').splitlines()
+            lines = get.text.splitlines()
             regexes = []
             for line in lines:
                 regexes.append(re.compile(line))

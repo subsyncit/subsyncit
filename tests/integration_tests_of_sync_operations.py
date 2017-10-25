@@ -628,8 +628,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('PUT', self.svn_url + "wilma/bambam", data="hi", auth=(self.user, self.passwd), verify=False))
 
         try:
-            # with open(self.test_sync_dir_a + "x", "w") as text_file:
-            #     text_file.write("nudge")
             self.wait_for_file_to_appear(self.test_sync_dir_a + "fred")
             self.wait_for_file_to_appear(self.test_sync_dir_a + "wilma/bambam")
             self.wait_for_file_to_appear(self.test_sync_dir_a + "barney")
@@ -658,6 +656,52 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.should_start_with(rows, 1, "02, barney, None, None,")
         self.should_start_with(rows, 2, "03, wilma, None, None,")
         self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
+
+
+    @timedtest
+    def test_that_subsynct_can_participate_in_the_merkel_esque_revisions_with_subversion(self):
+
+        test_start = time.time()
+
+        self.expect201(requests.request('MKCOL', self.svn_url + "fred/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
+
+        process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
+
+        try:
+
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "wilma")
+            with open(self.test_sync_dir_a + "wilma/bambam", "w") as text_file:
+                text_file.write("hi")
+
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "fred")
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "barney")
+            self.wait_for_URL_to_appear(self.svn_url + "wilma/bambam")
+
+            # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
+            self.assertEquals(self.no_leading_spaces(
+                """<root> : 03
+                   fred/ : 01
+                   wilma/ : 03
+                   wilma/bambam : 03
+                   barney/ : 02
+                   """),
+                self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
+
+            time.sleep(1)
+
+        finally:
+            self.end(process_a, self.test_sync_dir_a)
+
+        process_a.wait()
+
+        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+
+        self.should_start_with(rows, 0, "01, fred, None, None,")
+        self.should_start_with(rows, 1, "02, barney, None, None,")
+        self.should_start_with(rows, 2, "03, wilma, None, None,")
+        self.should_start_with(rows, 3, "04, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
 
     # ======================================================================================================
 

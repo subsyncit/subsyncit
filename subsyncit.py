@@ -700,12 +700,13 @@ def process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_
     #     print ("Dir GET needlessly: " + relative_file_name)
     # print("rr=" + str(rr))
     rv = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
-    files_table.update({
-        'RV': rv,
-        'RS': None,
-        'LS': None,
-        'ST': 0},
-        Query().RFN == relative_file_name)
+    update_row_revision(files_table, relative_file_name, rv)
+    # files_table.update({
+    #     'RV': rv,
+    #     'RS': None,
+    #     'LS': None,
+    #     'ST': 0},
+    #     Query().RFN == relative_file_name)
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 

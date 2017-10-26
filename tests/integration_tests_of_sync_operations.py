@@ -731,10 +731,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
         try:
-
             self.wait_for_file_to_appear(self.test_sync_dir_a + "a/a/b/txt")
             self.wait_for_file_to_appear(self.test_sync_dir_a + "b/b/b")
-
             time.sleep(1)
 
         finally:
@@ -744,21 +742,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rows = "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a))
 
-        self.assertEquals("""01, a, None, None
-01, a/b, None, None
-01, a/b/b, None, None
-02, a/a, None, None
-02, a/a/b, None, None
-02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
-03, a/a/a, None, None
-04, a/b/a, None, None
-05, b, None, None
-05, b/b, None, None
-05, b/b/b, None, None
-06, b/a, None, None
-06, b/a/b, None, None
-07, b/a/a, None, None
-08, b/b/a, None, None""", rows)
+        self.assertEquals(self.no_leading_spaces("""01, a, None, None
+            01, a/b, None, None
+            01, a/b/b, None, None
+            02, a/a, None, None
+            02, a/a/b, None, None
+            02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
+            03, a/a/a, None, None
+            04, a/b/a, None, None
+            05, b, None, None
+            05, b/b, None, None
+            05, b/b/b, None, None
+            06, b/a, None, None
+            06, b/a/b, None, None
+            07, b/a/a, None, None
+            08, b/b/a, None, None"""), rows)
 
 
     # ======================================================================================================

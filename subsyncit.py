@@ -602,7 +602,9 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
     if propfind.status_code != 207:
         raise UnexpectedStatusCode(options.status_code)
 
-    return int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
+    i = int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
+    print("ZZZ > " + relative_file_name + " " + str(i))
+    return i
 
 
 def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_directory, absolute_local_root_path, baseline_relative_path, repo_parent_path, db_dir):
@@ -628,52 +630,9 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 relative_file_name = row['RFN']
                 is_file = row['F'] == "1"
                 old_sha1_should_be = row['LS']
-                abs_local_file_path = (absolute_local_root_path + relative_file_name)
-                head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
-
-                if not is_file or ("Location" in head.headers and head.headers[
-                    "Location"].endswith("/")):
-                    if not os.path.exists(abs_local_file_path):
-                        os.makedirs(abs_local_file_path)
-                    # TODO
-                    # if row['RV'] != 0:
-                    #     print ("Dir GET needlessly: " + relative_file_name)
-                    # print("rr=" + str(rr))
-                    files_table.update({
-                        'RV': get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path),
-                        'RS': None,
-                        'LS': None,
-                        'ST': 0},
-                        Query().RFN == relative_file_name)
-
-                else:
-                    (rev, sha1, baseline_relative_path_not_used) \
-                        = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
-
-                    get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
-
-                    # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code) + " " + str(rev))
-
-                    # See https://github.com/requests/requests/issues/2155
-                    # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
-
-                    if os.path.exists(abs_local_file_path):
-                        local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                        if local_sha1 != old_sha1_should_be:
-                            os.rename(abs_local_file_path,
-                                      abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
-                                          '%Y-%m-%d-%H-%M-%S'))
-                    with open(abs_local_file_path, 'wb') as f:
-                        for chunk in get.iter_content(chunk_size=500000000):
-                            if chunk:
-                                f.write(chunk)
-                    file_count += 1
-                    sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                    osstat = os.stat(abs_local_file_path)
-                    size_ts = osstat.st_size + osstat.st_mtime
-                    update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
-                    update_row_revision(files_table, relative_file_name, rev)
-                update_instruction_in_table(files_table, None, relative_file_name)
+                file_count = process_GET(absolute_local_root_path, baseline_relative_path, db_dir, file_count, files_table, is_file, old_sha1_should_be, relative_file_name,
+                                         remote_subversion_directory,
+                                         repo_parent_path, requests_session)
         finally:
 
             section_end(num_rows > 0,  "Batch " + str(batch) + " of"
@@ -682,6 +641,71 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                      + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec.", start)
 
     my_trace(2,  " ---> perform_GETs_per_instructions - end")
+
+
+def process_GET(absolute_local_root_path, baseline_relative_path, db_dir, file_count, files_table, is_file, old_sha1_should_be, relative_file_name, remote_subversion_directory, repo_parent_path,
+                requests_session):
+    abs_local_file_path = (absolute_local_root_path + relative_file_name)
+
+    head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
+    if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
+        process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session)
+    else:
+        file_count = process_GET_of_file(abs_local_file_path, db_dir, file_count, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
+    update_instruction_in_table(files_table, None, relative_file_name)
+    instruct_to_reGET_parent_if_there(files_table, relative_file_name)
+
+    return file_count
+
+
+def instruct_to_reGET_parent_if_there(files_table, relative_file_name):
+    parent = dirname(relative_file_name)
+    if parent and parent != "":
+        parent_row = files_table.get(Query().RFN == parent)
+        if parent_row and parent_row['I'] == None:
+            update_instruction_in_table(files_table, GET_FROM_SERVER, parent)
+
+
+def process_GET_of_file(abs_local_file_path, db_dir, file_count, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session):
+    (rev, sha1, baseline_relative_path_not_used) \
+        = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
+    get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
+    # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code) + " " + str(rev))
+    # See https://github.com/requests/requests/issues/2155
+    # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
+    if os.path.exists(abs_local_file_path):
+        local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+        if local_sha1 != old_sha1_should_be:
+            os.rename(abs_local_file_path,
+                      abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
+                          '%Y-%m-%d-%H-%M-%S'))
+    with open(abs_local_file_path, 'wb') as f:
+        for chunk in get.iter_content(chunk_size=500000000):
+            if chunk:
+                f.write(chunk)
+    file_count += 1
+    sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+    osstat = os.stat(abs_local_file_path)
+    size_ts = osstat.st_size + osstat.st_mtime
+    update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
+    update_row_revision(files_table, relative_file_name, rev)
+    return file_count
+
+
+def process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session):
+    if not os.path.exists(abs_local_file_path):
+        os.makedirs(abs_local_file_path)
+    # TODO
+    # if row['RV'] != 0:
+    #     print ("Dir GET needlessly: " + relative_file_name)
+    # print("rr=" + str(rr))
+    rv = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
+    files_table.update({
+        'RV': rv,
+        'RS': None,
+        'LS': None,
+        'ST': 0},
+        Query().RFN == relative_file_name)
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
@@ -700,6 +724,7 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
                 os.remove(name)
                 deletes += 1
                 files_table.remove(Query().RFN == relative_file_name)
+                instruct_to_reGET_parent_if_there(files_table, relative_file_name)
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
@@ -845,6 +870,7 @@ def perform_PUTs_per_instructions(requests_session, files_table, remote_subversi
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
                         update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, remote_subversion_directory, baseline_relative_path, size_ts)
+                        instruct_to_reGET_parent_if_there(files_table, rel_file_name)
                         put_count += 1
                         update_instruction_in_table(files_table, None, rel_file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
@@ -951,6 +977,7 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
             print(("Unexpected on_deleted output for " + row['RFN'] + " = [" + str(output) + "]"))
+        instruct_to_reGET_parent_if_there(files_table, rfn)
 
     speed = "."
     if len(rows) > 0:

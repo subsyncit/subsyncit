@@ -150,7 +150,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end(process_b, self.test_sync_dir_b)
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
-        self.should_start_with(rows, 0, "01, output.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0,")
+        self.should_start_with(rows, 0, "01, output.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0")
 
 
     @timedtest
@@ -181,7 +181,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
-        self.should_start_with(rows, 0, "01, output.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36,")
+        self.should_start_with(rows, 0, "01, output.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36")
 
 
 
@@ -652,14 +652,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
 
-        self.should_start_with(rows, 0, "01, fred, None, None,")
-        self.should_start_with(rows, 1, "02, barney, None, None,")
-        self.should_start_with(rows, 2, "03, wilma, None, None,")
-        self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
+        self.should_start_with(rows, 0, "01, fred, None, None")
+        self.should_start_with(rows, 1, "02, barney, None, None")
+        self.should_start_with(rows, 2, "03, wilma, None, None")
+        self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
 
 
     @timedtest
     def test_that_subsynct_can_participate_in_the_merkel_esque_revisions_with_subversion(self):
+
+        # This test is much like the one above and wants to allow an eyeball confirmation that Subsyncit is adequately tracking revision numbers
 
         test_start = time.time()
 
@@ -698,10 +700,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
 
-        self.should_start_with(rows, 0, "01, fred, None, None,")
-        self.should_start_with(rows, 1, "02, barney, None, None,")
-        self.should_start_with(rows, 2, "03, wilma, None, None,")
-        self.should_start_with(rows, 3, "04, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42,")
+        self.should_start_with(rows, 0, "01, fred, None, None")
+        self.should_start_with(rows, 1, "02, barney, None, None")
+        self.should_start_with(rows, 2, "03, wilma, None, None")
+        self.should_start_with(rows, 3, "04, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
+
 
     # ======================================================================================================
 
@@ -823,8 +826,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rv = ""
         for row in files_table.all():
-            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['RFN'] + ", " + str(row['RS'])+ ", " + str(row['LS']) + ", " \
-                  + str(round((row['ST'] - os.stat(sync_dir + row['RFN']).st_size - test_start) * 1000)) + "\n"
+            #ts = str(round((row['ST'] - os.stat(sync_dir + row['RFN']).st_size - test_start) * 1000))
+            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['RFN'] + ", " + str(row['RS'])+ ", " + str(row['LS'])  + "\n"
 
         return sorted(rv.splitlines())
 

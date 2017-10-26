@@ -603,7 +603,6 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
         raise UnexpectedStatusCode(options.status_code)
 
     i = int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
-    print("ZZZ > " + relative_file_name + " " + str(i))
     return i
 
 

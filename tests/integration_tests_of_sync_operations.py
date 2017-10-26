@@ -705,6 +705,61 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.should_start_with(rows, 2, "03, wilma, None, None")
         self.should_start_with(rows, 3, "04, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
 
+    @timedtest
+    def test_that_subsynct_can_participate_in_a_deeper_merkle_traversal(self):
+
+        # This test is much like the one above and wants to allow an eyeball confirmation that Subsyncit is adequately tracking revision numbers
+
+        test_start = time.time()
+
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/", auth=(self.user, self.passwd), verify=False))  # 9     5
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/", auth=(self.user, self.passwd), verify=False))  # 15    9
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a", auth=(self.user, self.passwd), verify=False))  # 7    3
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/a", auth=(self.user, self.passwd), verify=False))  # 4   1
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/b", auth=(self.user, self.passwd), verify=False))  # 6   2
+        self.expect201(requests.request('PUT', self.svn_url + "a/a/b/txt", data="hi", auth=(self.user, self.passwd), verify=False))  # 6   2
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b", auth=(self.user, self.passwd), verify=False))  # 9      5
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/a", auth=(self.user, self.passwd), verify=False))  # 8    4
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/b", auth=(self.user, self.passwd), verify=False))  # 9    5
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a", auth=(self.user, self.passwd), verify=False))  # 12     7
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/a", auth=(self.user, self.passwd), verify=False))  # 11   6
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/b", auth=(self.user, self.passwd), verify=False))  # 12   7
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b", auth=(self.user, self.passwd), verify=False))  # 15     9
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/a", auth=(self.user, self.passwd), verify=False))  # 14   8
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/b", auth=(self.user, self.passwd), verify=False))  # 15   9
+
+        process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
+
+        try:
+
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "a/a/b/txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "b/b/b")
+
+            time.sleep(1)
+
+        finally:
+            self.end(process_a, self.test_sync_dir_a)
+
+        process_a.wait()
+
+        rows = "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a))
+
+        self.assertEquals("""01, a, None, None
+01, a/b, None, None
+01, a/b/b, None, None
+02, a/a, None, None
+02, a/a/b, None, None
+02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
+03, a/a/a, None, None
+04, a/b/a, None, None
+05, b, None, None
+05, b/b, None, None
+05, b/b/b, None, None
+06, b/a, None, None
+06, b/a/b, None, None
+07, b/a/a, None, None
+08, b/b/a, None, None""", rows)
+
 
     # ======================================================================================================
 

@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.26.28ea3dec742cc0031f685260431a9cd569f6ce47
+# Version: 2017.10.27.4f795c59d3d3b6b81a9606fa86874f873055d650
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -649,9 +649,16 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 relative_file_name = row['RFN']
                 is_file = row['F'] == "1"
                 old_sha1_should_be = row['LS']
-                file_count += process_GET(absolute_local_root_path, baseline_relative_path, db_dir, files_table, is_file, old_sha1_should_be, relative_file_name,
-                                         remote_subversion_directory,
-                                         repo_parent_path, requests_session)
+                abs_local_file_path = (absolute_local_root_path + relative_file_name)
+                head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
+                if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
+                    process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session)
+                else:
+                    process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
+                    file_count += 1
+                update_instruction_in_table(files_table, None, relative_file_name)
+                instruct_to_reGET_parent_if_there(files_table, relative_file_name)
+
         finally:
 
             section_end(num_rows > 0,  "Batch " + str(batch) + " of"
@@ -661,20 +668,6 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
 
     my_trace(2,  " ---> perform_GETs_per_instructions - end")
 
-
-def process_GET(absolute_local_root_path, baseline_relative_path, db_dir, files_table, is_file, old_sha1_should_be, relative_file_name, remote_subversion_directory, repo_parent_path,
-                requests_session):
-    file_count = 0
-    abs_local_file_path = (absolute_local_root_path + relative_file_name)
-    head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
-    if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-        process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session)
-    else:
-        process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
-        file_count += 1
-    update_instruction_in_table(files_table, None, relative_file_name)
-    instruct_to_reGET_parent_if_there(files_table, relative_file_name)
-    return file_count
 
 
 def instruct_to_reGET_parent_if_there(files_table, relative_file_name):

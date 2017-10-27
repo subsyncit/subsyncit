@@ -48,7 +48,7 @@ if subsyncit_modified and changes_to_be_committed:
     newlines = []
     for i, line in enumerate(get_all):
         if i == 4:
-            newlines.append("# Version: " + str(datetime.utcnow()) + " (UTC)\n")
+            newlines.append("# Version: " + str(datetime.utcnow()).replace("-",".").replace(":",".").replace(" ",".") + ".UTC\n")
         else:
             newlines.append(line)
 

@@ -691,7 +691,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                    """),
                 self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
-            time.sleep(1)
+            time.sleep(2)
 
         finally:
             self.end(process_a, self.test_sync_dir_a)
@@ -700,10 +700,15 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
 
-        self.should_start_with(rows, 0, "01, fred, None, None")
-        self.should_start_with(rows, 1, "02, barney, None, None")
-        self.should_start_with(rows, 2, "03, wilma, None, None")
-        self.should_start_with(rows, 3, "04, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
+        print("\n".join(rows))
+
+        self.assertEquals(self.no_leading_spaces(
+             """01, fred, None, None
+                02, barney, None, None
+                03, wilma, None, None
+                03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
+            "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
+
 
     @timedtest
     def test_that_subsynct_can_participate_in_a_deeper_merkle_traversal(self):
@@ -712,21 +717,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         test_start = time.time()
 
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/", auth=(self.user, self.passwd), verify=False))  # 9     5
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/", auth=(self.user, self.passwd), verify=False))  # 15    9
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/a", auth=(self.user, self.passwd), verify=False))  # 7    3
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/a", auth=(self.user, self.passwd), verify=False))  # 4   1
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/b", auth=(self.user, self.passwd), verify=False))  # 6   2
-        self.expect201(requests.request('PUT', self.svn_url + "a/a/b/txt", data="hi", auth=(self.user, self.passwd), verify=False))  # 6   2
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/b", auth=(self.user, self.passwd), verify=False))  # 9      5
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/a", auth=(self.user, self.passwd), verify=False))  # 8    4
-        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/b", auth=(self.user, self.passwd), verify=False))  # 9    5
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/a", auth=(self.user, self.passwd), verify=False))  # 12     7
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/a", auth=(self.user, self.passwd), verify=False))  # 11   6
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/b", auth=(self.user, self.passwd), verify=False))  # 12   7
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/b", auth=(self.user, self.passwd), verify=False))  # 15     9
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/a", auth=(self.user, self.passwd), verify=False))  # 14   8
-        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/b", auth=(self.user, self.passwd), verify=False))  # 15   9
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/a/b", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('PUT', self.svn_url + "a/a/b/txt", data="hi", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "a/b/b", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/a/b", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/a", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "b/b/b", auth=(self.user, self.passwd), verify=False))
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
@@ -740,23 +745,22 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         process_a.wait()
 
-        rows = "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a))
-
-        self.assertEquals(self.no_leading_spaces("""01, a, None, None
-            01, a/b, None, None
-            01, a/b/b, None, None
-            02, a/a, None, None
-            02, a/a/b, None, None
-            02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
-            03, a/a/a, None, None
-            04, a/b/a, None, None
-            05, b, None, None
-            05, b/b, None, None
-            05, b/b/b, None, None
-            06, b/a, None, None
-            06, b/a/b, None, None
-            07, b/a/a, None, None
-            08, b/b/a, None, None"""), rows)
+        self.assertEquals(self.no_leading_spaces(
+            """01, a/a/a, None, None
+               02, a/a, None, None
+               02, a/a/b, None, None
+               02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
+               03, a/b/a, None, None
+               04, a, None, None
+               04, a/b, None, None
+               04, a/b/b, None, None
+               05, b/a/a, None, None
+               06, b/a, None, None
+               06, b/a/b, None, None
+               07, b/b/a, None, None
+               08, b, None, None
+               08, b/b, None, None
+               08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
 
 
     # ======================================================================================================
@@ -874,7 +878,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         # Revisions are normalized down to 1,2,3,4 when they actually might be 12,13,14 in the repo
         revision_map = {}
-        for ix, (key, value) in enumerate(revisions.items()):
+        for ix, (key, value) in enumerate(sorted(revisions.items())):
             revision_map[key] = ix + 1
 
         rv = ""

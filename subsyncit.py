@@ -19,7 +19,7 @@
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Three arguments for this script:
-# 1. Remote Subversion repo URL. Like - "http://0.0.0.0:32768/svn/testrepo"
+# 1. Remote Subversion repo URL. Like - "http://127.0.0.1:8099/svn/testrepo"
 # 2. Local Sync Directory (fully qualified or relative). Like /path/to/mySyncDir
 # 3. Subversion user name.
 #
@@ -629,7 +629,7 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 relative_file_name = row['RFN']
                 is_file = row['F'] == "1"
                 old_sha1_should_be = row['LS']
-                file_count = process_GET(absolute_local_root_path, baseline_relative_path, db_dir, file_count, files_table, is_file, old_sha1_should_be, relative_file_name,
+                file_count += process_GET(absolute_local_root_path, baseline_relative_path, db_dir, files_table, is_file, old_sha1_should_be, relative_file_name,
                                          remote_subversion_directory,
                                          repo_parent_path, requests_session)
         finally:
@@ -642,18 +642,18 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
     my_trace(2,  " ---> perform_GETs_per_instructions - end")
 
 
-def process_GET(absolute_local_root_path, baseline_relative_path, db_dir, file_count, files_table, is_file, old_sha1_should_be, relative_file_name, remote_subversion_directory, repo_parent_path,
+def process_GET(absolute_local_root_path, baseline_relative_path, db_dir, files_table, is_file, old_sha1_should_be, relative_file_name, remote_subversion_directory, repo_parent_path,
                 requests_session):
+    file_count = 0
     abs_local_file_path = (absolute_local_root_path + relative_file_name)
-
     head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
     if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
         process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session)
     else:
-        file_count = process_GET_of_file(abs_local_file_path, db_dir, file_count, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
+        process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
+        file_count += 1
     update_instruction_in_table(files_table, None, relative_file_name)
     instruct_to_reGET_parent_if_there(files_table, relative_file_name)
-
     return file_count
 
 
@@ -665,7 +665,7 @@ def instruct_to_reGET_parent_if_there(files_table, relative_file_name):
             update_instruction_in_table(files_table, GET_FROM_SERVER, parent)
 
 
-def process_GET_of_file(abs_local_file_path, db_dir, file_count, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session):
+def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session):
     (rev, sha1, baseline_relative_path_not_used) \
         = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
@@ -682,30 +682,18 @@ def process_GET_of_file(abs_local_file_path, db_dir, file_count, files_table, ol
         for chunk in get.iter_content(chunk_size=500000000):
             if chunk:
                 f.write(chunk)
-    file_count += 1
     sha1 = calculate_sha1_from_local_file(abs_local_file_path)
     osstat = os.stat(abs_local_file_path)
     size_ts = osstat.st_size + osstat.st_mtime
     update_row_shas_size_and_timestamp(files_table, relative_file_name, sha1, size_ts)
     update_row_revision(files_table, relative_file_name, rev)
-    return file_count
 
 
 def process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session):
     if not os.path.exists(abs_local_file_path):
         os.makedirs(abs_local_file_path)
-    # TODO
-    # if row['RV'] != 0:
-    #     print ("Dir GET needlessly: " + relative_file_name)
-    # print("rr=" + str(rr))
     rv = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
     update_row_revision(files_table, relative_file_name, rv)
-    # files_table.update({
-    #     'RV': rv,
-    #     'RS': None,
-    #     'LS': None,
-    #     'ST': 0},
-    #     Query().RFN == relative_file_name)
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
@@ -1046,12 +1034,6 @@ def write_error(db_dir, msg):
     make_hidden_on_windows_too(subsyncit_err)
 
 
-def sleep_a_little(sleep_secs):
-    #print("sleeping " + str(sleep_secs))
-    time.sleep(sleep_secs)
-
-
-
 def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, sync_dir):
 
     my_trace(2,  " ---> transform_enqueued_actions_into_instructions - start")
@@ -1367,7 +1349,8 @@ def main(argv):
 
                         # Act on existing instructions (if any)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path, repo_parent_path, db_dir)
+                        perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path,
+                                                                  repo_parent_path, db_dir)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
@@ -1398,8 +1381,8 @@ def main(argv):
                 with open(status_file, "w") as text_file:
                     text_file.write(json.dumps(status))
 
-            if to_add_chg_or_del < 200:
-                sleep_a_little(args.sleep_secs)
+            if to_add_chg_or_del == 0:
+                time.sleep(args.sleep_secs)
 
             iteration += 1
     except NoConnection as e:

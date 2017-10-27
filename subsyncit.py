@@ -406,7 +406,6 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if relative_file_name == "subsyncit.stop":
             self.stop_subsyncit(event)
-            #threading.thread.exit()
             return
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
@@ -414,7 +413,6 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
             add_queued = (relative_file_name, "add_file") in self.local_adds_chgs_deletes_queue
             chg_queued = (relative_file_name, "change") in self.local_adds_chgs_deletes_queue
             if not add_queued and not chg_queued:
-                # print("on_chg: " + event.src_path)
                 self.local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
 
 

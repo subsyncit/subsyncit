@@ -10,8 +10,7 @@ based on source files (unlike Java an its .class files), and I wanted to
 have a version number in there just in case I'm supporting something.
 
 '''
-
-
+import hashlib
 from datetime import datetime
 import sh
 import sys
@@ -45,10 +44,16 @@ if subsyncit_modified and changes_to_be_committed:
     with open("subsyncit.py", 'r') as f:
         get_all = f.readlines()
 
+    for_sha = ""
+    for line in get_all:
+        if "# Version" not in line:
+            for_sha += line + "\n"
+    hash = hashlib.sha1(for_sha).hexdigest()
+
     newlines = []
     for i, line in enumerate(get_all):
         if i == 4:
-            newlines.append("# Version: " + str(datetime.utcnow()).replace("-",".").replace(":",".").replace(" ",".") + ".UTC\n")
+            newlines.append("# Version: " + str(datetime.utcnow()).replace("-",".").replace(":",".").replace(" ",".") + hash + "\n")
         else:
             newlines.append(line)
 

@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.02.10.59.89520728ea3dec742cc0031f685260431a9cd569f6ce47
+# Version: 2017.10.26.28ea3dec742cc0031f685260431a9cd569f6ce47
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #

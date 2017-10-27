@@ -56,7 +56,7 @@ if subsyncit_modified:
 
     newlines = []
     for i, line in enumerate(get_all):
-        if i == 4:
+        if line.startswith("# Version: "):
             newlines.append("# Version: " + str(datetime.utcnow()).replace("-",".").replace(":",".").replace(" ",".") + hash + "\n")
         else:
             newlines.append(line)

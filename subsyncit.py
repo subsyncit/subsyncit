@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.02.09.32.695900e55bc6dfd4095010b3a4ced4668613a630591db8
+# Version: 2017.10.27.02.10.59.89520728ea3dec742cc0031f685260431a9cd569f6ce47
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -1338,8 +1338,8 @@ def main(argv):
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
 
-            # recreating this per iteration is good given use could be changing connection to the
-            # internet as they move around (office, home, wifi, 3G)
+            # Recreating a session per iteration is good given use could be changing
+            # connection to the internet as they move around (office, home, wifi, 3G)
             requests_session = make_requests_session(auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \

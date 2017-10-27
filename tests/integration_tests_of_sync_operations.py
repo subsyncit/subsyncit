@@ -320,7 +320,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             time.sleep(0.5)
             os.remove(op_process_b)
             self.wait_for_file_to_disappear(self.test_sync_dir_a + "output.txt")
-            print(self.test_sync_dir_a + "output.txt has disappeared as expected")
         finally:
 
             self.end(process_a, self.test_sync_dir_a)

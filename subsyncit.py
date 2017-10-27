@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017-10-16 11:58:03.688428 (UTC)
+# Version: 2017.10.27.01.42.13.005953.UTC
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -109,6 +109,23 @@ class MyRequestsTracer():
     def __init__(self, delegate):
         self.delegate = delegate
         self.always_print = False
+        self.counts = {
+            "mkcol": 0,
+            "put": 0,
+            "get": 0,
+            "delete": 0
+        }
+
+
+    def anything_happened(self):
+        return self.counts["mkcol"] > 0 or self.counts["put"] > 0 or self.counts["get"] > 0 or self.counts["delete"] > 0
+
+
+    def clear_counts(self):
+        self.counts["mkcol"] = 0
+        self.counts["put"] = 0
+        self.counts["get"] = 0
+        self.counts["delete"] = 0
 
     def mkcol(self, arg0):
         start = time.time()
@@ -118,6 +135,7 @@ class MyRequestsTracer():
             status = request.status_code
             return request
         finally:
+            self.counts["mkcol"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
                 debug("Requests.MKCOL: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
@@ -131,6 +149,7 @@ class MyRequestsTracer():
             status = request.status_code
             return request
         finally:
+            self.counts["delete"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
                 debug("Requests.DELETE: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
@@ -170,6 +189,7 @@ class MyRequestsTracer():
             status = request.status_code
             return request
         finally:
+            self.counts["put"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
                 debug("Requests.PUT: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
@@ -185,6 +205,7 @@ class MyRequestsTracer():
             status = request.status_code
             return request
         finally:
+            self.counts["get"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
                 debug("Requests.GET: [" + str(status) + "] " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
@@ -1325,7 +1346,6 @@ def main(argv):
             (root_revision_on_remote_svn_repo, sha1, baseline_relative_path) = \
                 get_remote_subversion_server_revision_for(requests_session, args.remote_subversion_directory, "", db_dir) # root
 
-            to_add_chg_or_del = 0
 
             if root_revision_on_remote_svn_repo > 0:
 
@@ -1381,8 +1401,9 @@ def main(argv):
                 with open(status_file, "w") as text_file:
                     text_file.write(json.dumps(status))
 
-            if to_add_chg_or_del == 0:
+            if not requests_session.anything_happened():
                 time.sleep(args.sleep_secs)
+                requests_session.clear_counts()
 
             iteration += 1
     except NoConnection as e:

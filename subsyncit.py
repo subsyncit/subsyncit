@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.4f795c59d3d3b6b81a9606fa86874f873055d650
+# Version: 2017.10.27.22f93557633c56a1034f17677465bedd491a55b6
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -47,7 +47,6 @@ import sys
 import time
 from os.path import dirname, splitext
 from time import strftime
-import threading
 import requests
 import requests.packages.urllib3
 from boltons.setutils import IndexedSet
@@ -522,13 +521,18 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
+    ix = remote_subversion_directory.index(baseline_relative_path) + len(baseline_relative_path) + 1
+    prefix = remote_subversion_directory[ix:]
+
     start = time.time()
     unprocessed_files = {}
 
     rows = files_table.search(Query().I == None)
     for row in rows:
         relative_file_name = row['RFN']
-        if not should_be_excluded(relative_file_name, excluded_filename_patterns):
+        if not should_be_excluded(relative_file_name, excluded_filename_patterns)\
+                and relative_file_name.startswith(prefix):
+                  # ^ faster if inside the where clause
             unprocessed_files[relative_file_name] = {
                 "I" : row["I"],
                 "RS" : row['RS']
@@ -563,7 +567,7 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     # files still in the unprocessed_files list are not up on Subversion
     for relative_file_name, val in unprocessed_files.items():
         local_deletes += 1
-        update_instruction_in_table(files_table, 'DL', relative_file_name)
+        update_instruction_in_table(files_table, DELETE_LOCALLY, relative_file_name)
 
     section_end(get_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
           + " local deletes (comparison of all the files on the Subversion server to files in the sync dir) took %s.", start)
@@ -626,7 +630,7 @@ def get_revision_for_remote_directory(requests_session, remote_subversion_direct
     return i
 
 
-def perform_GETs_per_instructions(requests_session, files_table, remote_subversion_directory, absolute_local_root_path, baseline_relative_path, repo_parent_path, db_dir):
+def perform_GETs_per_instructions(requests_session, excluded_filename_patterns, files_table, remote_subversion_directory, absolute_local_root_path, baseline_relative_path, repo_parent_path, db_dir):
 
     my_trace(2,  " ---> perform_GETs_per_instructions - start")
     more_to_do = True
@@ -649,10 +653,12 @@ def perform_GETs_per_instructions(requests_session, files_table, remote_subversi
                 relative_file_name = row['RFN']
                 is_file = row['F'] == "1"
                 old_sha1_should_be = row['LS']
+                curr_rev = row['RV']
                 abs_local_file_path = (absolute_local_root_path + relative_file_name)
                 head = requests_session.head(remote_subversion_directory + esc(relative_file_name))
                 if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-                    process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session)
+                    process_GET_of_directory(abs_local_file_path, curr_rev, excluded_filename_patterns, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory,
+                                             repo_parent_path, requests_session)
                 else:
                     process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, relative_file_name, remote_subversion_directory, requests_session)
                     file_count += 1
@@ -688,9 +694,8 @@ def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_shoul
     if os.path.exists(abs_local_file_path):
         local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
         if local_sha1 != old_sha1_should_be:
-            os.rename(abs_local_file_path,
-                      abs_local_file_path + ".clash_" + datetime.datetime.today().strftime(
-                          '%Y-%m-%d-%H-%M-%S'))
+            clash_file_name = abs_local_file_path + ".clash_" + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+            os.rename(abs_local_file_path, clash_file_name)
     with open(abs_local_file_path, 'wb') as f:
         for chunk in get.iter_content(chunk_size=500000000):
             if chunk:
@@ -702,11 +707,20 @@ def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_shoul
     update_row_revision(files_table, relative_file_name, rev)
 
 
-def process_GET_of_directory(abs_local_file_path, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path, requests_session):
+def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filename_patterns, baseline_relative_path, files_table, relative_file_name, remote_subversion_directory, repo_parent_path,
+                             requests_session):
     if not os.path.exists(abs_local_file_path):
         os.makedirs(abs_local_file_path)
-    rv = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
-    update_row_revision(files_table, relative_file_name, rv)
+    curr_rmt_rev = get_revision_for_remote_directory(requests_session, remote_subversion_directory, relative_file_name, baseline_relative_path, repo_parent_path)
+    if curr_local_rev != curr_rmt_rev:
+        update_row_revision(files_table, relative_file_name, curr_rmt_rev)
+        instruct_to_reGET_parent_if_there(files_table, relative_file_name)
+    create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(
+        files_table, excluded_filename_patterns,
+        svn_metadata_xml_elements_for(requests_session, remote_subversion_directory + esc(relative_file_name), baseline_relative_path),
+        requests_session, remote_subversion_directory + esc(relative_file_name),
+        baseline_relative_path, repo_parent_path)
+
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
 
@@ -714,7 +728,7 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
 
     start = time.time()
 
-    rows = files_table.search(Query().I == 'DL')
+    rows = files_table.search(Query().I == DELETE_LOCALLY)
 
     deletes = 0
     try:
@@ -784,7 +798,7 @@ def get_relative_file_name(full_path, absolute_local_root_path):
 
 def svn_metadata_xml_elements_for(requests_session, url, baseline_relative_path):
 
-    propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': 'infinity'})
+    propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': '1'})
 
     output = propfind.text
 
@@ -1361,8 +1375,8 @@ def main(argv):
 
                         # Act on existing instructions (if any)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        perform_GETs_per_instructions(requests_session, files_table, args.remote_subversion_directory, args.absolute_local_root_path, baseline_relative_path,
-                                                                  repo_parent_path, db_dir)
+                        perform_GETs_per_instructions(requests_session, excluded_filename_patterns, files_table, args.remote_subversion_directory, args.absolute_local_root_path,
+                                                      baseline_relative_path, repo_parent_path, db_dir)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

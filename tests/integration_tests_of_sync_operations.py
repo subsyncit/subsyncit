@@ -417,28 +417,28 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_file_changed_while_sync_agent_offline_does_not_sync_sync_later_if_it_changed_on_the_server_too(self):
 
-        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+        self.expect201(requests.put(self.svn_url + "something.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
         try:
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "output.txt", "Hello")
+            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "something.txt", "Hello")
             self.signal_stop_of_subsyncit(self.test_sync_dir_a)
             process_a.wait()
 
-            self.expect204(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello changed on server", verify=False))
+            self.expect204(requests.put(self.svn_url + "something.txt", auth=(self.user, self.passwd), data="Hello changed on server", verify=False))
 
-            with open(self.test_sync_dir_a + "output.txt", "w") as text_file:
+            with open(self.test_sync_dir_a + "something.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
             os.mkdir(self.test_sync_dir_a + "aaa")
-            with open(self.test_sync_dir_a + "aaa/output.txt", "w") as text_file:
+            with open(self.test_sync_dir_a + "aaa/something_else.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
             process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
 
             time.sleep(2)
 
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "output.txt", "Hello changed on server")
+            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "something.txt", "Hello changed on server")
             clash_file = glob2.glob(self.test_sync_dir_a + "*.clash_*")[0]
             self.wait_for_file_contents_to_contain(clash_file, "Hello changed locally too")
         finally:
@@ -930,7 +930,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         start = time.time()
         while not os.path.exists(file_should_appear):
             if time.time() - start > 15:
-                self.fail(file_should_appear + " shouldhave appeared but did not")
+                self.fail(file_should_appear + " should have appeared but did not")
             time.sleep(.01)
 
 

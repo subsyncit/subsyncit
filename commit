@@ -50,6 +50,11 @@ if subsyncit_modified and changes_to_be_committed:
             for_sha += line + "\n"
     hash = hashlib.sha1(for_sha).hexdigest()
 
+    print("hash: " + hash)
+
+    with open("subsyncit.py", 'r') as f:
+        get_all = f.readlines()
+
     newlines = []
     for i, line in enumerate(get_all):
         if i == 4:

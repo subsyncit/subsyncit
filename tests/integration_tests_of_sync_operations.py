@@ -75,7 +75,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         cls.client = docker.from_env()
 
-        print("Kill Docker container (if any) from last test suite invocation...")
+        print("Kill Docker container (if necessary) from last test suite invocation...")
         cls.kill_docker_container(True)
         cls.kill_docker_container(True)
         print("... done")
@@ -418,6 +418,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     def test_a_file_changed_while_sync_agent_offline_does_not_sync_sync_later_if_it_changed_on_the_server_too(self):
 
         self.expect201(requests.put(self.svn_url + "something.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
+        self.expect201(requests.request('MKCOL', self.svn_url + "aaa/", auth=(self.user, self.passwd), verify=False))
+        self.expect201(requests.put(self.svn_url + "aaa/another.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
         process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
         try:
@@ -430,8 +432,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             with open(self.test_sync_dir_a + "something.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
-            os.mkdir(self.test_sync_dir_a + "aaa")
             with open(self.test_sync_dir_a + "aaa/something_else.txt", "w") as text_file:
+                text_file.write("Hello changed locally too")
+
+            os.mkdir(self.test_sync_dir_a + "aaa/bbb")
+            with open(self.test_sync_dir_a + "aaa/bbb/something_else.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
             process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a)
@@ -441,6 +446,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "something.txt", "Hello changed on server")
             clash_file = glob2.glob(self.test_sync_dir_a + "*.clash_*")[0]
             self.wait_for_file_contents_to_contain(clash_file, "Hello changed locally too")
+
+            self.wait_for_URL_to_appear(self.svn_url + "aaa/something_else.txt")
+            self.wait_for_URL_to_appear(self.svn_url + "aaa/bbb/something_else.txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_a + "aaa/another.txt")
+
         finally:
             self.end(process_a, self.test_sync_dir_a)
 
@@ -699,8 +709,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         process_a.wait()
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_a)
-
-        print("\n".join(rows))
 
         self.assertEquals(self.no_leading_spaces(
              """01, fred, None, None
@@ -1015,10 +1023,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         open1.close()
         return contents
 
+
     def wait_for_file_to_disappear(self, f):
         start = time.time()
         while os.path.exists(f):
-            if time.time() - start > 15:
+            if time.time() - start > 45:
                 self.fail("file " + f + " didn't disappear in 45 secs")
             time.sleep(1)
 

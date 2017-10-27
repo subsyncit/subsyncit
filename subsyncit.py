@@ -517,12 +517,11 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
 
 
 def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server, requests_session,
-                                                                                              remote_subversion_directory, baseline_relative_path, repo_parent_path):
+                                                                                              remote_subversion_directory, prefix, baseline_relative_path, repo_parent_path):
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
-    ix = remote_subversion_directory.index(baseline_relative_path) + len(baseline_relative_path) + 1
-    prefix = remote_subversion_directory[ix:]
+    prefix_dir_count = prefix.count(os.sep)
 
     start = time.time()
     unprocessed_files = {}
@@ -531,8 +530,12 @@ def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subv
     for row in rows:
         relative_file_name = row['RFN']
         if not should_be_excluded(relative_file_name, excluded_filename_patterns)\
-                and relative_file_name.startswith(prefix):
-                  # ^ faster if inside the where clause
+                and relative_file_name.startswith(prefix):  # perhaps would faster if inside the where clause
+
+            if relative_file_name.count(os.sep) - prefix_dir_count > 0:
+                continue
+                     # ^ this directory not sub-directories
+
             unprocessed_files[relative_file_name] = {
                 "I" : row["I"],
                 "RS" : row['RS']
@@ -718,7 +721,7 @@ def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filen
     create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(
         files_table, excluded_filename_patterns,
         svn_metadata_xml_elements_for(requests_session, remote_subversion_directory + esc(relative_file_name), baseline_relative_path),
-        requests_session, remote_subversion_directory + esc(relative_file_name),
+        requests_session, remote_subversion_directory, esc(relative_file_name) + os.sep,
         baseline_relative_path, repo_parent_path)
 
 
@@ -1388,8 +1391,8 @@ def main(argv):
                         # Actions indicated by Subversion server next, only if root revision is different
                         if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
                             create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                         svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path), requests_session, args.remote_subversion_directory,
-                                                                                                                      baseline_relative_path, repo_parent_path)
+                                         svn_metadata_xml_elements_for(requests_session, args.remote_subversion_directory,baseline_relative_path),
+                                         requests_session, args.remote_subversion_directory, "", baseline_relative_path, repo_parent_path)
                             # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, db_dir)
                             last_root_revision = root_revision_on_remote_svn_repo
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

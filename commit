@@ -27,9 +27,6 @@ subsyncit_modified = False
 
 for line in changeset.splitlines():
 
-    if line == "Changes to be committed:":
-        changes_to_be_committed = True
-
     if line == "Changes not staged for commit:":
         changes_not_staged_for_commit = True
 
@@ -40,9 +37,8 @@ for line in changeset.splitlines():
         subsyncit_modified = True
 
 print ("subsyncit_modified " + str(subsyncit_modified))
-print ("changes_to_be_committed " + str(changes_to_be_committed))
 
-if subsyncit_modified and changes_to_be_committed:
+if subsyncit_modified:
 
     with open("subsyncit.py", 'r') as f:
         get_all = f.readlines()
@@ -51,7 +47,7 @@ if subsyncit_modified and changes_to_be_committed:
     for line in get_all:
         if "# Version" not in line:
             for_sha += line + "\n"
-    hash = hashlib.sha1(for_sha).hexdigest()
+    hash = hashlib.sha1(for_sha.encode('utf-8')).hexdigest()
 
     print("hash: " + hash)
 

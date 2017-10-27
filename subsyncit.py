@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.01.42.13.005953.UTC
+# Version: 2017.10.27.02.09.32.695900e55bc6dfd4095010b3a4ced4668613a630591db8
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -401,7 +401,6 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         relative_file_name = get_relative_file_name(event.src_path, self.absolute_local_root_path)
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
-        # print("on_del: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     def on_modified(self, event):

@@ -19,14 +19,16 @@
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Three arguments for this script:
-# 1. Remote Subversion repo URL. Like - "http://127.0.0.1:8099/svn/testrepo"
-# 2. Local Sync Directory (fully qualified or relative). Like /path/to/mySyncDir
-# 3. Subversion user name.
+#
+#   1. Remote Subversion repo URL. Like - "http://127.0.0.1:8099/svn/testrepo"
+#   2. Local Sync Directory (fully qualified or relative). Like /path/to/mySyncDir
+#   3. Subversion user name.
 #
 # Optional arguments
-# `--passwd` to supply the password on the command line (plain text) instead of prompting for secure entry
-# `--no-verify-ssl-cert` to ignore certificate errors if you have a self-signed (say for testing)
-# `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
+#
+#   `--passwd` to supply the password on the command line (plain text) instead of prompting for secure entry
+#   `--no-verify-ssl-cert` to ignore certificate errors if you have a self-signed (say for testing)
+#   `--sleep-secs-between-polling` to supply a number of seconds to wait between poll of the server for changes
 #
 # Note: There's a database created in the Local Sync Directory called ".subsyncit.db".
 # It contains one row per file that's synced back and forth. There's a field in there RV
@@ -689,7 +691,7 @@ def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_shoul
         = get_remote_subversion_server_revision_for(requests_session, remote_subversion_directory, relative_file_name, db_dir)
     get = requests_session.get(remote_subversion_directory + esc(relative_file_name).replace(os.sep, "/"), stream=True)
     # debug(absolute_local_root_path + relative_file_name + ": GET " + str(get.status_code) + " " + str(rev))
-    # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses 
+    # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
     # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
     if os.path.exists(abs_local_file_path):
         local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)

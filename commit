@@ -39,6 +39,9 @@ for line in changeset.splitlines():
             exit(1)
         subsyncit_modified = True
 
+print ("subsyncit_modified " + str(subsyncit_modified))
+print ("changes_to_be_committed " + str(changes_to_be_committed))
+
 if subsyncit_modified and changes_to_be_committed:
 
     with open("subsyncit.py", 'r') as f:

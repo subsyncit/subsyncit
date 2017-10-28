@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.f72de288d82f16d8c82ec222cd436cb01a86cb8f
+# Version: 2017.10.28.c035c0f675b4fee8e32385cd9733f013d839baa3
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -624,12 +624,13 @@ def get_revision_for_remote_directory(requests_session, SVN, file_name):
                                               '<prop>'
                                               '<version-name/>'
                                               '</prop>'
-                                              '</propfind>')
+                                              '</propfind>',
+                                         headers = {'Depth': '1'})
 
-    content = propfind.content.decode("utf-8")
+    content = propfind.text
 
     if propfind.status_code != 207:
-        raise UnexpectedStatusCode(options.status_code)
+        raise UnexpectedStatusCode(propfind.status_code)
 
     i = int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
     return i

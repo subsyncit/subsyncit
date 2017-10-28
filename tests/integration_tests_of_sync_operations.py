@@ -81,7 +81,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         print("... done")
 
         print("Start Docker container for this test suite invocation...")
-        cls.client.containers.run("subsyncit/alpine-svn-dav", name="subsyncitTests", detach=True, ports={'80/tcp': 8099}, auto_remove=True)
+        cls.client.containers.run("subsyncit/alpine-svn-dav:latest", name="subsyncitTests", detach=True, ports={'80/tcp': 8099}, auto_remove=True)
         content = ""
         while "It works!" not in content:
             try:
@@ -815,7 +815,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
         rev_dir = self.svn_url.replace('testrepo/', 'testrepo/!svn/rvr/' + youngest_rev + "/") + dir
-        propfind = requests.request('PROPFIND', rev_dir, auth=("davsvn", "davsvn"),
+        propfind = requests.request('PROPFIND', rev_dir, auth=("davsvn", "davsvn"), headers = {'Depth': '1'},
                                     data='<?xml version="1.0" encoding="utf-8"?>'
                                          '<propfind xmlns="DAV:">'
                                          '<prop>'

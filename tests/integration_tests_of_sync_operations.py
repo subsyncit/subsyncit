@@ -890,8 +890,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rv = ""
         for row in files_table.all():
-            #ts = str(round((row['ST'] - os.stat(sync_dir + row['RFN']).st_size - test_start) * 1000))
-            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['RFN'] + ", " + str(row['RS'])+ ", " + str(row['LS'])  + "\n"
+            #ts = str(round((row['ST'] - os.stat(sync_dir + row['FN']).st_size - test_start) * 1000))
+            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['FN'] + ", " + str(row['RS'])+ ", " + str(row['LS'])  + "\n"
 
         return sorted(rv.splitlines())
 

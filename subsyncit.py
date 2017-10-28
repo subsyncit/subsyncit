@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.27.22f93557633c56a1034f17677465bedd491a55b6
+# Version: 2017.10.27.f72de288d82f16d8c82ec222cd436cb01a86cb8f
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -388,7 +388,6 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if should_be_excluded(relative_file_name, self.excluded_filename_patterns):
             return
 
-        # print("on_add: " + relative_file_name)
         self.local_adds_chgs_deletes_queue.add((relative_file_name, "add_" + ("dir" if event.is_directory else "file")))
 
     def stop_subsyncit(self, event):
@@ -476,6 +475,7 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, SVN)
     if not dir:
         make_directories_if_missing_in_db(files_table, dirname(dname), requests_session, SVN)
         dirs_made += 1
+        print ("x TYPE: " + dname)
         dir = {'RFN': dname,
                'F': "0",
                'RS': None,
@@ -521,8 +521,8 @@ def put_item_in_remote_subversion_directory(requests_session, abs_local_file_pat
     return dirs_made
 
 
-def create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns, files_on_svn_server, requests_session,
-                                                                                              SVN, prefix):
+def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(abs_local_file_path, files_table, excluded_filename_patterns,
+                                                                                            files_on_svn_server, requests_session, SVN, prefix):
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
@@ -659,7 +659,7 @@ def perform_GETs_per_instructions(requests_session, excluded_filename_patterns, 
                 my_trace(2,  ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
             for row in rows:
                 relative_file_name = row['RFN']
-                is_file = row['F'] == "1"
+                is_file = row['F'] == '1'
                 old_sha1_should_be = row['LS']
                 curr_rev = row['RV']
                 abs_local_file_path = (absolute_local_root_path + relative_file_name)
@@ -722,7 +722,8 @@ def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filen
         update_row_revision(files_table, relative_file_name, curr_rmt_rev)
         instruct_to_reGET_parent_if_there(files_table, relative_file_name)
 
-    create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(
+    create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(
+        abs_local_file_path,
         files_table, excluded_filename_patterns,
         svn_metadata_xml_elements_for(requests_session, SVN, esc(relative_file_name)),
         requests_session, SVN, esc(relative_file_name) + os.sep)
@@ -986,7 +987,7 @@ def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_sessio
         requests_delete = requests_session.delete(SVN.remote_subversion_directory + esc(rfn).replace(os.sep, "/"))
         output = requests_delete.text
         # debug(row['RFN'] + ": DELETE " + str(requests_delete.status_code))
-        if row['F'] == 1:  # F
+        if row['F'] == "1":  # F
             files_deleted += 1
             files_table.remove(Query().RFN == row['RFN'])
         else:
@@ -1083,7 +1084,6 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
                 # print("File to add: " + relative_file_name + " is not in subversion")
                 upsert_row_in_table(files_table, relative_file_name, 0, "file", instruction=PUT_ON_SERVER)
         elif action == "change":
-            # print("File changed: " + relative_file_name + " is not in subversion")
             update_instruction_in_table(files_table, PUT_ON_SERVER, relative_file_name)
         elif action == "delete":
             in_subversion = file_is_in_subversion(files_table, relative_file_name)
@@ -1121,7 +1121,7 @@ def scantree(path):
             yield entry
 
 
-def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, excluded_filename_patterns, last_scanned):
+def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute_local_root_path, excluded_filename_patterns, last_scanned):
 
     my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - start")
 
@@ -1145,23 +1145,16 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
         row = files_table.get(Query().RFN == relative_file_name)
         in_subversion = row and row['RS'] != None
-        if row and row['I'] != None: # or row['F'] == "1")
+        if row and row['I'] != None:
             continue
         if not in_subversion:
-            add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
-            if not add_queued:
-                local_adds_chgs_deletes_queue.add((relative_file_name, "add_file"))
-                to_add += 1
+            upsert_row_in_table(files_table, relative_file_name, 0, 'file', PUT_ON_SERVER)
+            to_add += 1
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
             if size_ts != row["ST"]:
-                # This is speculative, logic further on will not PUT the file up if the SHA
-                # is unchanged, but file_size + time_stamp change is approximate but far quicker
-                add_queued = (relative_file_name, "add_file") in local_adds_chgs_deletes_queue
-                chg_queued = (relative_file_name, "change") in local_adds_chgs_deletes_queue
-                if not add_queued and not chg_queued:
-                    local_adds_chgs_deletes_queue.add((relative_file_name, "change"))
-                    to_change += 1
+                update_instruction_in_table(files_table, PUT_ON_SERVER, relative_file_name)
+                to_change += 1
 
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
           + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
@@ -1170,7 +1163,7 @@ def enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_add
 
     return to_add + to_change
 
-def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, absolute_local_root_path, last_scanned_path):
+def scan_for_any_missed_deletes(is_shutting_down, files_table, absolute_local_root_path, last_scanned_path):
 
     my_trace(2,  " ---> enqueue_any_missed_deletes - start")
 
@@ -1185,10 +1178,9 @@ def enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_de
             break
 
         relative_file_name = row['RFN']
-        relative_file_name = relative_file_name
-        if not os.path.exists(absolute_local_root_path + relative_file_name):
+        if not os.path.exists(absolute_local_root_path + relative_file_name) and row['I'] == None:
+            update_instruction_in_table(files_table, DELETE_ON_SERVER, relative_file_name)
             to_delete += 1
-            local_adds_chgs_deletes_queue.add((relative_file_name, "delete"))
 
     section_end(to_delete > 0,  ": " + str(to_delete)
              + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
@@ -1398,8 +1390,8 @@ def main(argv):
 
                         last_scanned = get_last_scanned_if_needed(db_dir, last_scanned)
 
-                        to_add_chg_or_del =  enqueue_any_missed_adds_and_changes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
-                                           + enqueue_any_missed_deletes(is_shutting_down, files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path, last_scanned)
+                        to_add_chg_or_del = scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
+                                            + scan_for_any_missed_deletes(is_shutting_down, files_table, args.absolute_local_root_path, last_scanned)
 
                         update_last_scanned_if_needed(db_dir, scan_start_time, to_add_chg_or_del)
 
@@ -1415,9 +1407,9 @@ def main(argv):
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         # Actions indicated by Subversion server next, only if root revision is different
                         if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
-                            create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                         svn_metadata_xml_elements_for(requests_session, server_details, ""),
-                                         requests_session, server_details, "")
+                            create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(args.absolute_local_root_path, files_table, excluded_filename_patterns,
+                                                                                                                    svn_metadata_xml_elements_for(requests_session, server_details, ""),
+                                                                                                                    requests_session, server_details, "")
                             # update_revisions_for_created_directories(requests_session, files_table, args.remote_subversion_directory, db_dir)
                             last_root_revision = root_revision_on_remote_svn_repo
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

@@ -232,6 +232,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion))
 
             # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
+            self.maxDiff = None
             self.assertEquals(str(sorted(
                 os.listdir(self.test_sync_dir_a))),
                 "['CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']")

@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.28.c035c0f675b4fee8e32385cd9733f013d839baa3
+# Version: 2017.10.28.766cf990ea94d250c47cd70f5c89b22a26751dca
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -195,8 +195,10 @@ class MyRequestsTracer():
             if durn > 1 or self.always_print:
                 debug("Requests.PUT: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
+
     def data_print(self, data):
         return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
+
 
     def get(self, arg0, stream=None):
         start = time.time()
@@ -720,11 +722,12 @@ def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filen
         update_row_revision(files_table, file_name, curr_rmt_rev)
         instruct_to_reGET_parent_if_there(files_table, file_name)
 
-    create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(
-        abs_local_file_path,
-        files_table, excluded_filename_patterns,
-        svn_metadata_xml_elements_for(requests_session, SVN, esc(file_name)),
-        requests_session, SVN, esc(file_name) + os.sep)
+        dir = esc(file_name) + "/"
+        create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(
+            abs_local_file_path,
+            files_table, excluded_filename_patterns,
+            svn_metadata_xml_elements_for(requests_session, SVN, dir),
+            requests_session, SVN, dir)
 
 
 def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
@@ -754,7 +757,9 @@ def perform_local_deletes_per_instructions(files_table, absolute_local_root_path
     my_trace(2,  " ---> perform_local_deletes_per_instructions - end")
 
 def update_row_shas_size_and_timestamp(files_table, file_name, sha1, size_ts):
-    foo = files_table.update({'RS': sha1, 'LS': sha1, 'ST': size_ts}, Query().FN == file_name)
+    if sha1 == None:
+        raise BaseException("No sha1 for " + file_name)
+    files_table.update({'RS': sha1, 'LS': sha1, 'ST': size_ts}, Query().FN == file_name)
 
 def prt_files_table_for(files_table, file_name):
     return str(files_table.search(Query().FN == file_name))
@@ -803,7 +808,7 @@ def get_file_name(full_path, absolute_local_root_path):
 
 def svn_metadata_xml_elements_for(requests_session, SVN, prefix):
 
-    propfind = requests_session.propfind(SVN.remote_subversion_directory + prefix, data=PROPFIND, headers={'Depth': '1'})
+    propfind = requests_session.propfind(SVN.remote_subversion_directory + esc(prefix), data=PROPFIND, headers={'Depth': '1'})
 
     output = propfind.text
 
@@ -816,16 +821,19 @@ def svn_metadata_xml_elements_for(requests_session, SVN, prefix):
 
     entries = []; path = ""; rev = 0; sha1 = None
 
-    for line in output.splitlines():
+    splitlines = output.splitlines()
+    for line in splitlines:
         if ":baseline-relative-path>" in line:
-            path = un_encode_path(extract_path_from_baseline_rel_path(SVN, line))
+            rel_path = extract_path_from_baseline_rel_path(SVN, line)
+            path = un_encode_path(rel_path)
         if ":version-name" in line:
             rev = int(line[line.index(">") + 1:line.index("<", 3)])
         if ":sha1-checksum>" in line:
             sha1 = line[line.index(">") + 1:line.index("<", 3)]
         if "</D:response>" in line:
-            if path != "":
-                entries.append ((path, rev, sha1))
+            if len(path) >= len(prefix):
+                sha_ = (path, rev, sha1)
+                entries.append (sha_)
             path = ""; rev = 0; sha1 = None
 
     return entries
@@ -935,10 +943,10 @@ def perform_PUTs_per_instructions(requests_session, files_table, SVN, absolute_l
     return possible_clash_encountered
 
 def update_sha_and_revision_for_row(requests_session, files_table, file_name, local_sha1, SVN, size_ts):
-    elements_for = svn_metadata_xml_elements_for(requests_session, SVN, esc(file_name))
+    elements_for = svn_metadata_xml_elements_for(requests_session, SVN, file_name)
     i = len(elements_for)
-    if i > 1:
-        raise Exception("too many elements found: " + str(i))
+    if i != 1:
+        raise BaseException("too many or too few elements found: " + str(i) + " for " + SVN.remote_subversion_directory + file_name)
     for not_used_this_time, remote_rev_num, remote_sha1 in elements_for:
         if local_sha1 != remote_sha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser()

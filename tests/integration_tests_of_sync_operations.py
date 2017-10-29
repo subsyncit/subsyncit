@@ -22,19 +22,19 @@ import argparse
 import copy
 import json
 import os
-import copy
-import time
-import unittest
+import re
 import shutil
 import sys
+import time
+import unittest
+
+import docker
 import glob2
 import requests
 import sh
 from decorator import decorator
-
-import docker
 from docker.errors import NotFound
-from tinydb import Query, TinyDB
+from tinydb import TinyDB
 
 
 class IntegrationTestsOfSyncOperations(unittest.TestCase):
@@ -66,7 +66,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         dt = str((t2 - t1) * 1.00)
         dtout = dt[:(dt.find(".") + 4)]
         print('\nTest {0} finished in {1}s'.format(getattr(f, "__name__", "<unnamed>"), dtout))
-        print("=================================================================================")
+        print("==================================================================================================================================")
 
 
     @classmethod
@@ -617,7 +617,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             aborted_get_size = os.stat(self.test_sync_dir_a + "testBigRandomFile").st_size
 
-            print("^ YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite")
+            print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n  \\/")
 
             self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
@@ -757,13 +757,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
             "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
 
-        self.assertEquals(self.simplify_output(self.process_output_a), self.no_leading_spaces(
+        self.assertEquals(self.no_leading_spaces(
             """[SECTION] Instructions created for 3 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-               [SECTION] Batch 1 of: GETs from Subversion server took N ms: 0 files, and 3 directories, at 0.0 files/sec.
-               [SECTION] Batch 1 of: PUTs on Subversion server took N ms, 1 PUT files, taking N ms each .
+               [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec.
+               [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each .
                [SECTION] Instructions created for 3 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-               [SECTION] Batch 1 of: GETs from Subversion server took N ms: 0 files, and 3 directories, at 0.0 files/sec.
-               """))
+               [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec.
+               """), self.simplify_output(self.process_output_a))
 
     @timedtest
     def test_that_subsynct_can_participate_in_a_deeper_merkle_traversal(self):
@@ -816,6 +816,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                08, b, None, None
                08, b/b, None, None
                08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
+
+        self.assertEquals(self.simplify_output(self.process_output_a), self.no_leading_spaces(
+             """[SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 2 directories, at F files/sec.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 4 directories, at F files/sec.
+                [SECTION] Instructions created for 1 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 8 directories, at F files/sec.
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec.
+            """))
 
 
     # ======================================================================================================
@@ -888,7 +903,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def make_a_big_random_file(self, filename, size):
         start = time.time()
-        print("Making " + size + " MB random file ... ")
+        print("Making " + size + " MB random file (time consuming) ... ")
         sh.bash("tests/make_a_so_big_file.sh", filename, size)
         print(" ... secs: " + str(round(time.time() - start, 1)))
 
@@ -1076,15 +1091,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     def simplify_output(self, process_output):
         op = process_output.getvalue()
         rv = ""
-        import re
         regex = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}): ")
         regex2 = re.compile(r"[0-9]\d*(\.\d*)? ms")
         regex3 = re.compile(r"[0-9]\d*(\.\d*)? ns")
+        regex4 = re.compile(r"[0-9]\d*(\.\d*)? files/sec")
         for line in op.splitlines():
-            one = regex.sub("", line)
-            two = regex2.sub("N ms", one, )
-            three = regex3.sub("N ns", two)
-            rv += three + "\n"
+            rv += regex4.sub("F files/sec", regex3.sub("N ns", regex2.sub("M ms", regex.sub("", line)))) + "\n"
         return rv
 
         pass

@@ -533,7 +533,7 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
     start = time.time()
     unprocessed_files = {}
 
-    rows = files_table.search(Query().I == None)
+    rows = files_table.search(Query().I == None) # TODO - should mask out Instructed ones??
     for row in rows:
         file_name = row['FN']
         if not should_be_excluded(file_name, excluded_filename_patterns)\
@@ -708,8 +708,11 @@ def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_shoul
             if chunk:
                 f.write(chunk)
     sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-    osstat = os.stat(abs_local_file_path)
-    size_ts = osstat.st_size + osstat.st_mtime
+    try:
+        osstat = os.stat(abs_local_file_path)
+        size_ts = osstat.st_size + osstat.st_mtime
+    except FileNotFoundError:
+        size_ts = 0 # test_a_deleted_file_syncs_back stimulates this
     update_row_shas_size_and_timestamp(files_table, file_name, sha1, size_ts)
     update_row_revision(files_table, file_name, rev)
 

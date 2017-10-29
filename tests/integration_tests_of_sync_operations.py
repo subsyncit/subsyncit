@@ -132,17 +132,20 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('MKCOL', self.svn_url, auth=(self.user, self.passwd), verify=False))
 
 
-
     def tearDown(self):
 
         self.end(self.process_a, self.test_sync_dir_a)
         self.end(self.process_b, self.test_sync_dir_b)
 
+        def list2reason(exc_list):
+            if exc_list and exc_list[-1][0] is self:
+                return exc_list[-1][1]
+
         # Listener to status from https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method
         result = self.defaultTestResult()
         self._feedErrorsToResult(result, self._outcome.errors)
-        failed = self.list2reason(result.errors) or self.list2reason(result.failures)
-
+        errs = str(list2reason(result.errors))
+        failed = "File \"subsyncit.py\", line" in errs or "AssertionError:" in str(list2reason(result.failures))
         a = self.process_output_a.getvalue()
         if failed and len(a) > 0:
             print(">>>>> A OUTPUT and ERR >>>>>")
@@ -153,17 +156,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             print(b)
 
 
-    def list2reason(self, exc_list):
-        if exc_list and exc_list[-1][0] is self:
-            return exc_list[-1][1]
-
-
     @timedtest
     def test_a_single_file_syncs(self):
 
         test_start = time.time()
 
-        self.start_two_subsyncits()
+        self.start_a_and_b_subsyncits()
         try:
             test_file_a = self.test_sync_dir_a + "testfile.txt"
             with open(test_file_a, "w", encoding="utf-8") as text_file:
@@ -181,7 +179,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_changed_file_syncs_back(self):
 
-        self.start_two_subsyncits()
+        self.start_a_and_b_subsyncits()
 
         test_start = time.time()
 
@@ -299,9 +297,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_a()
 
 
-    def path_exists_on_svn_server(self, path):
-        return 200 == requests.get(self.svn_url + path, auth=(self.user, self.passwd), verify=False).status_code
-
     @timedtest
     def test_a_deleted_file_syncs_down(self):
 
@@ -336,7 +331,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_deleted_file_syncs_back(self):
 
-        self.start_two_subsyncits()
+        self.start_a_and_b_subsyncits()
         try:
             a_path = self.test_sync_dir_a + "testfile"
             with open(a_path, "w", encoding="utf-8") as text_file:
@@ -351,38 +346,76 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_a_and_b()
 
 
-    def journal_to_a_and_b(self, s):
-        self.journal_to_a(s)
-        self.journal_to_b(s)
-
-
-    def journal_to_a(self, s):
-        self.process_output_a.writelines(s)
-
-
-    def journal_to_b(self, s):
-        self.process_output_b.writelines(s)
-
-
     @timedtest
     def test_a_file_changed_while_sync_agent_offline_still_sync_syncs_later(self):
 
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
 
-        self.start_two_subsyncits()
+        self.start_subsyncit_a()
+        self.start_subsyncit_b()
 
         try:
-            file_in_subsyncit_one = self.test_sync_dir_a + "output.txt"
-            file_in_subsyncit_two = self.test_sync_dir_b + "output.txt"
-            self.wait_for_file_to_appear(file_in_subsyncit_one)
-            self.wait_for_file_to_appear(file_in_subsyncit_two)
+            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
+            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_a)
+            self.wait_for_file_to_appear(file_in_subsyncit_b)
             self.signal_stop_of_subsyncit(self.test_sync_dir_b)
             self.process_b.wait()
-            with open(file_in_subsyncit_two, "w") as text_file:
+            with open(file_in_subsyncit_b, "w") as text_file:
                 text_file.write("Overrite locally in client 2")
-            self.process_b = self.start_subsyncit(self.svn_url, self.test_sync_dir_b, self.process_output_a)
-            # self.process_b = self.start_subsyncit(self.svn_repo + dir, self.testSyncDir2)
-            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Overrite locally in client 2")
+            self.start_subsyncit_b()
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+        finally:
+            self.end_process_a_and_b()
+
+
+    @timedtest
+    def test_a_file_changed_while_sync_agent_offline_still_sync_syncs_later_when_no_fs_listener(self):
+
+        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
+
+        self.start_subsyncit_a(extra_opt="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_b(extra_opt="--do-not-listen-for-file-system-events")
+
+        try:
+            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
+            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_a)
+            self.wait_for_file_to_appear(file_in_subsyncit_b)
+            self.signal_stop_of_subsyncit(self.test_sync_dir_b)
+            self.process_b.wait()
+            with open(file_in_subsyncit_b, "w") as text_file:
+                text_file.write("Overrite locally in client 2")
+            self.start_subsyncit_b()
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+        finally:
+            self.end_process_a_and_b()
+
+
+    @timedtest
+    def test_both_change_detectors_turned_off_means_that_files_are_not_pushed(self):
+
+        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
+
+        self.start_subsyncit_a(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_b(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+
+        try:
+            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
+            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_a)
+            self.wait_for_file_to_appear(file_in_subsyncit_b)
+            self.signal_stop_of_subsyncit(self.test_sync_dir_b)
+            self.process_b.wait()
+            with open(file_in_subsyncit_b, "w") as text_file:
+                text_file.write("Overrite locally in client 2")
+            self.start_subsyncit_b(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+            ae = None
+            try:
+                self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+            except AssertionError as e:
+                ae = e
+            self.assertIsNotNone(ae)
         finally:
             self.end_process_a_and_b()
 
@@ -615,7 +648,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             aborted_get_size = os.stat(self.test_sync_dir_a + "testBigRandomFile").st_size
 
-            print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n  \\/")
+            print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n \\/")
 
             self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
@@ -717,7 +750,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a, extra_opt="--do-not-scan-file-system-periodically")
 
         try:
 
@@ -832,6 +865,23 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
     # ======================================================================================================
+
+    def path_exists_on_svn_server(self, path):
+        return 200 == requests.get(self.svn_url + path, auth=(self.user, self.passwd), verify=False).status_code
+
+
+    def journal_to_a_and_b(self, s):
+        self.journal_to_a(s)
+        self.journal_to_b(s)
+
+
+    def journal_to_a(self, s):
+        self.process_output_a.writelines(s)
+
+
+    def journal_to_b(self, s):
+        self.process_output_b.writelines(s)
+
 
     def get_status_dict(self):
         return json.loads(self.file_contents(self.db_dir_a + "status.json"))
@@ -1010,19 +1060,29 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.line += ("\n" + line)
 
 
-    def start_two_subsyncits(self):
+    def start_a_and_b_subsyncits(self):
         self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
         self.process_b = self.start_subsyncit(self.svn_url, self.test_sync_dir_b, self.process_output_b)
  
 
-    def start_subsyncit(self, svn_repo, dir, process_output, passwd=None):
+    def start_subsyncit_a(self, passwd=None, extra_opt=None, extra_opt2=None):
+        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
+
+
+    def start_subsyncit_b(self, passwd=None, extra_opt=None, extra_opt2=None):
+        self.process_b = self.start_subsyncit(self.svn_url, self.test_sync_dir_b, self.process_output_b, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
+
+
+    def start_subsyncit(self, svn_repo, dir, process_output, passwd=None, extra_opt=None, extra_opt2=None):
         if passwd is None:
             passwd = self.passwd
         print("Subsyncit start. URL: " + svn_repo + ", sync dir: " + dir)
-        python = sh.python3("subsyncit.py", svn_repo, dir, self.user, '--no-verify-ssl-cert',
-                           "--sleep-secs-between-polling", "1",
-                           '--passwd', passwd, _out=process_output,
-                           _err_to_out=True, _bg=True)
+        args = ['subsyncit.py', svn_repo, dir, self.user, '--no-verify-ssl-cert', "--sleep-secs-between-polling", "1", '--passwd', passwd]
+        if extra_opt:
+            args.append(extra_opt)
+        if extra_opt2:
+            args.append(extra_opt2)
+        python = sh.python3(args, _out=process_output, _err_to_out=True, _bg=True)
         return python
 
 

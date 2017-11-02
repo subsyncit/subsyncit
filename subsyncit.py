@@ -2,7 +2,7 @@
 #
 # Subsyncit - File sync backed by Subversion
 #
-# Version: 2017.10.29.f27529d180bb3f2eea0657cb9c560c9cecd0f325
+# Version: 2017.11.02.db309d7d455c23d88120e214afddc8361b0188bb
 #
 #   Copyright (c) 2016 - 2017, Paul Hammant
 #
@@ -109,7 +109,7 @@ class MyRequestsTracer():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = False
+        self.always_print = True
         self.counts = {
             "mkcol": 0,
             "put": 0,
@@ -139,7 +139,7 @@ class MyRequestsTracer():
             self.counts["mkcol"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.MKCOL: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.MKCOL   : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def delete(self, arg0):
@@ -153,7 +153,7 @@ class MyRequestsTracer():
             self.counts["delete"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.DELETE: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.DELETE  : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def head(self, arg0):
@@ -166,7 +166,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > 0.5 or self.always_print:
-                debug("Requests.HEAD: [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+                debug("Requests.HEAD    : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
     def propfind(self, arg0, data, headers=None):
@@ -193,7 +193,7 @@ class MyRequestsTracer():
             self.counts["put"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.PUT: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests.PUT     : [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
     def data_print(self, data):
@@ -211,7 +211,7 @@ class MyRequestsTracer():
             self.counts["get"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.GET: [" + str(status) + "] " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+                debug("Requests.GET     : [" + str(status) + "] " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
 
 
     def options(self, arg0, data=None):
@@ -224,7 +224,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests.OPTIONS: [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                debug("Requests.OPTIONS : [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
 
 
     def report(self, arg0, youngest_rev):
@@ -239,7 +239,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests.REPORT: [" + str(status) + "] " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
+                debug("Requests.REPORT  : [" + str(status) + "] " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
 
 
 class MyTinyDBTrace():
@@ -562,9 +562,11 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
                 continue
             if not match['RS'] == sha1:
                 update_instruction_in_table(files_table, GET_FROM_SERVER, file_name)
+                print("GET " + file_name)
                 get_count += 1
         else:
             upsert_row_in_table(files_table, file_name, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
+            print ("GET " + file_name)
             get_count += 1
 
     my_trace(2,  " done iterating over files_on_svn_server")

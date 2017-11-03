@@ -370,22 +370,63 @@ class ServerDetails(object):
     pass
 
 
+class LastStatus(object):
+
+    def __init__(self):
+        self.string = ""
+
+
+class ExcludedPatternNames(object):
+
+    def __init__(self):
+        self.regexes = []
+
+    def update_exclusions(self, requests_session, server_details):
+        try:
+            get = requests_session.get(server_details.remote_subversion_directory + ".subsyncit-excluded-filename-patterns")
+            if (get.status_code == 200):
+                lines = get.text.splitlines()
+                regexes = []
+                for line in lines:
+                    regexes.append(re.compile(line))
+                self.regexes = regexes
+        except requests.exceptions.ConnectionError as e:
+            pass
+            # leave as is
+
+    def should_be_excluded(self, file_name):
+
+        basename = os.path.basename(file_name)
+
+        if basename.startswith(".") \
+               or file_name == "subsyncit.stop" \
+               or len(file_name) == 0 \
+               or ".clash_" in file_name:
+            return True
+
+        for pattern in self.regexes:
+            if pattern.search(basename):
+                return True
+
+        return False
+
+
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
-    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher, is_shutting_down):
+    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher, is_shutting_down, excluded_patterns):
         super(FileSystemNotificationHandler, self).__init__(ignore_patterns=["*/.*"])
         self.is_shutting_down = is_shutting_down
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
         self.absolute_local_root_path = absolute_local_root_path
         self.file_system_watcher = file_system_watcher
-        self.excluded_filename_patterns = []
+        self.excluded_filename_patterns = excluded_patterns
 
     def on_created(self, event):
         file_name = get_file_name(event.src_path, self.absolute_local_root_path)
         if file_name == "subsyncit.stop":
             self.stop_subsyncit(event)
             return
-        if should_be_excluded(file_name, self.excluded_filename_patterns):
+        if self.excluded_filename_patterns.should_be_excluded(file_name):
             return
 
         self.local_adds_chgs_deletes_queue.add((file_name, "add_" + ("dir" if event.is_directory else "file")))
@@ -403,7 +444,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def on_deleted(self, event):
         file_name = get_file_name(event.src_path, self.absolute_local_root_path)
-        if should_be_excluded(file_name, self.excluded_filename_patterns):
+        if self.excluded_filename_patterns.should_be_excluded(file_name):
             return
         self.local_adds_chgs_deletes_queue.add((file_name, "delete"))
 
@@ -412,33 +453,13 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if file_name == "subsyncit.stop":
             self.stop_subsyncit(event)
             return
-        if should_be_excluded(file_name, self.excluded_filename_patterns):
+        if self.excluded_filename_patterns.should_be_excluded(file_name):
             return
         if not event.is_directory and not event.src_path.endswith(self.absolute_local_root_path):
             add_queued = (file_name, "add_file") in self.local_adds_chgs_deletes_queue
             chg_queued = (file_name, "change") in self.local_adds_chgs_deletes_queue
             if not add_queued and not chg_queued:
                 self.local_adds_chgs_deletes_queue.add((file_name, "change"))
-
-
-    def update_excluded_filename_patterns(self, excluded_filename_patterns):
-        self.excluded_filename_patterns = excluded_filename_patterns
-
-def should_be_excluded(file_name, excluded_filename_patterns):
-
-    basename = os.path.basename(file_name)
-
-    if basename.startswith(".") \
-           or file_name == "subsyncit.stop" \
-           or len(file_name) == 0 \
-           or ".clash_" in file_name:
-        return True
-
-    for pattern in excluded_filename_patterns:
-        if pattern.search(basename):
-            return True
-
-    return False
 
 
 def get_suffix(file_name):
@@ -534,7 +555,7 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
     rows = files_table.search(Query().I == None) # TODO - should mask out Instructed ones??
     for row in rows:
         file_name = row['FN']
-        if not should_be_excluded(file_name, excluded_filename_patterns)\
+        if not excluded_filename_patterns.should_be_excluded(file_name)\
                 and file_name.startswith(prefix):  # perhaps would faster if inside the where clause
 
             if file_name.count(os.sep) - prefix_dir_count > 0:
@@ -551,7 +572,7 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
     get_count = 0
     local_deletes = 0
     for file_name, rev, sha1 in files_on_svn_server:
-        if should_be_excluded(file_name, excluded_filename_patterns):
+        if excluded_filename_patterns.should_be_excluded(file_name):
             continue
         match = None
         if file_name in unprocessed_files:
@@ -961,7 +982,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, file_name, lo
         }, Query().FN == file_name)
 
 
-def perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, server_details):
+def svn_DELETEs(requests_session, files_table, server_details):
 
     my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - start")
 
@@ -1129,7 +1150,7 @@ def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute
         abs_local_file_path = entry.path
         file_name = get_file_name(abs_local_file_path, absolute_local_root_path)
 
-        if should_be_excluded(file_name, excluded_filename_patterns):
+        if excluded_filename_patterns.should_be_excluded(file_name):
             continue
 
         row = files_table.get(Query().FN == file_name)
@@ -1196,19 +1217,6 @@ def should_subsynct_keep_going(file_system_watcher, absolute_local_root_path):
             pass
         return False
     return True
-
-def get_excluded_filename_patterns(requests_session, server_details):
-    try:
-        get = requests_session.get(server_details.remote_subversion_directory + ".subsyncit-excluded-filename-patterns")
-        if (get.status_code == 200):
-            lines = get.text.splitlines()
-            regexes = []
-            for line in lines:
-                regexes.append(re.compile(line))
-            return regexes
-        return []
-    except requests.exceptions.ConnectionError as e:
-        return []
 
 
 def make_requests_session(auth, verifySetting):
@@ -1330,9 +1338,6 @@ def main(argv):
 
     class NUllObject(object):
 
-        def update_excluded_filename_patterns(self, arg0):
-            pass
-
         def is_alive(self):
             return True
 
@@ -1342,6 +1347,7 @@ def main(argv):
         def join(self):
             pass
 
+    excluded_filename_patterns = ExcludedPatternNames()
 
     notification_handler = NUllObject()
     file_system_watcher = NUllObject()
@@ -1356,7 +1362,7 @@ def main(argv):
             from watchdog.observers.read_directory_changes import WindowsApiObserver
             file_system_watcher = WindowsApiObserver
     
-        notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down)
+        notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down, excluded_filename_patterns)
         file_system_watcher.schedule(notification_handler, args.absolute_local_root_path, recursive=True)
         file_system_watcher.daemon = True
         file_system_watcher.start()
@@ -1364,10 +1370,10 @@ def main(argv):
     status = {
         "online": False
     }
-    last_status_str = ""
+
+    last_status = LastStatus()
 
     iteration = 0
-    excluded_filename_patterns = ["hi*"]
     last_scanned = 0
 
     server_details = ServerDetails()
@@ -1393,8 +1399,7 @@ def main(argv):
 
                     if root_revision_on_remote_svn_repo != None:
                         if iteration == 0: # At boot time only for now
-                            excluded_filename_patterns = get_excluded_filename_patterns(requests_session, server_details)
-                            notification_handler.update_excluded_filename_patterns(excluded_filename_patterns)
+                            excluded_filename_patterns.update_exclusions(requests_session, server_details)
 
                         scan_start_time = int(time.time())
 
@@ -1414,7 +1419,7 @@ def main(argv):
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         possible_clash_encountered = svn_PUTs(requests_session, files_table, server_details, args.absolute_local_root_path, db_dir)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, server_details)
+                        svn_DELETEs(requests_session, files_table, server_details)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         # Actions indicated by Subversion server next, only if root revision is different
                         if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
@@ -1432,8 +1437,8 @@ def main(argv):
                     status['online'] = False
 
             status_str = str(status)
-            if status_str != last_status_str:
-                last_status_str= status_str
+            if status_str != last_status.string:
+                last_status.string = status_str
                 status_file = db_dir + "status.json"
                 with open(status_file, "w") as text_file:
                     text_file.write(json.dumps(status))

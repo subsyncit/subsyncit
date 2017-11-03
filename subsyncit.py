@@ -169,17 +169,17 @@ class MyRequestsTracer():
                 debug("Requests.HEAD    : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
 
 
-    def propfind(self, arg0, data, headers=None):
+    def propfind(self, arg0, data, depth=1):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request("PROPFIND", arg0, data=data, headers=headers)
+            request = self.delegate.request("PROPFIND", arg0, data=data, headers={'Depth': str(depth)})
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.PROPFIND: [" + str(status) + "] " + str(arg0) + " <that propfind xml/> " + str(headers) + " " + english_duration(durn))
+                debug("Requests.PROPFIND: [" + str(status) + "] " + str(arg0) + " d=" + str(depth) + " " + english_duration(durn))
 
 
     def put(self, arg0, data=None):
@@ -627,7 +627,7 @@ def get_revision_for_remote_directory(requests_session, server_details, file_nam
                                               '<version-name/>'
                                               '</prop>'
                                               '</propfind>',
-                                         headers = {'Depth': '1'})
+                                         depth=1)
 
     content = propfind.text
 
@@ -811,7 +811,7 @@ def get_file_name(full_path, absolute_local_root_path):
 
 def svn_metadata_xml_elements_for(requests_session, server_details, prefix):
 
-    propfind = requests_session.propfind(server_details.remote_subversion_directory + esc(prefix), data=PROPFIND, headers={'Depth': '1'})
+    propfind = requests_session.propfind(server_details.remote_subversion_directory + esc(prefix), data=PROPFIND, depth=1)
 
     output = propfind.text
 
@@ -1007,7 +1007,7 @@ def get_remote_subversion_server_revision_for(requests_session, server_details, 
         url = server_details.remote_subversion_directory + esc(file_name).replace("\\", "/")
         if url.endswith("/"):
             url = url[:-1]
-        propfind = requests_session.propfind(url, data=PROPFIND, headers={'Depth': '0'})
+        propfind = requests_session.propfind(url, data=PROPFIND, depth=0)
         if 200 <= propfind.status_code <= 299:
             content = propfind.text
 

@@ -446,7 +446,7 @@ def get_suffix(file_name):
     return extension
 
 
-def make_remote_subversion_directory_and_return_revision(requests_session, dir, server_details):
+def svn_MKCOL(requests_session, dir, server_details):
     request = requests_session.mkcol(server_details.remote_subversion_directory + dir.replace(os.sep, "/"))
     rc = request.status_code
     if rc == 201:
@@ -482,7 +482,7 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, serv
                'LS': None,
                'ST': 0,
                'I': None,
-               'RV': make_remote_subversion_directory_and_return_revision(requests_session, dname, server_details)
+               'RV': svn_MKCOL(requests_session, dname, server_details)
                }
         files_table.insert(dir)
     elif dir['RV'] == 0:
@@ -490,13 +490,13 @@ def make_directories_if_missing_in_db(files_table, dname, requests_session, serv
         files_table.update(
             {
                 'I': None,
-                'RV': make_remote_subversion_directory_and_return_revision(requests_session, dname, server_details)
+                'RV': svn_MKCOL(requests_session, dname, server_details)
             },
             Query().FN == dname)
     return dirs_made
 
 
-def put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, server_details, absolute_local_root_path, files_table, alleged_remote_sha1, db_dir):
+def PUT_file(requests_session, abs_local_file_path, server_details, absolute_local_root_path, files_table, alleged_remote_sha1, db_dir):
     dirs_made = 0
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(0.1)
@@ -638,7 +638,7 @@ def get_revision_for_remote_directory(requests_session, server_details, file_nam
     return i
 
 
-def perform_GETs_per_instructions(requests_session, excluded_filename_patterns, files_table, server_details, absolute_local_root_path, db_dir):
+def svn_GETS(requests_session, excluded_filename_patterns, files_table, server_details, absolute_local_root_path, db_dir):
 
     my_trace(2,  " ---> perform_GETs_per_instructions - start")
     more_to_do = True
@@ -665,9 +665,9 @@ def perform_GETs_per_instructions(requests_session, excluded_filename_patterns, 
                 abs_local_file_path = (absolute_local_root_path + file_name)
                 head = requests_session.head(server_details.remote_subversion_directory + esc(file_name))
                 if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-                    process_GET_of_directory(abs_local_file_path, curr_rev, excluded_filename_patterns, files_table, file_name, server_details, requests_session)
+                    GET_dir(abs_local_file_path, curr_rev, excluded_filename_patterns, files_table, file_name, server_details, requests_session)
                 else:
-                    process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, server_details, requests_session)
+                    GET_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, server_details, requests_session)
                     file_count += 1
                 update_instruction_in_table(files_table, None, file_name)
                 instruct_to_reGET_parent_if_there(files_table, file_name)
@@ -691,7 +691,7 @@ def instruct_to_reGET_parent_if_there(files_table, file_name):
             update_instruction_in_table(files_table, GET_FROM_SERVER, parent)
 
 
-def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, server_details, requests_session):
+def GET_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, server_details, requests_session):
     (rev, sha1, baseline_relative_path_not_used) \
         = get_remote_subversion_server_revision_for(requests_session, server_details, file_name, db_dir)
     get = requests_session.get(server_details.remote_subversion_directory + esc(file_name).replace(os.sep, "/"), stream=True)
@@ -717,7 +717,7 @@ def process_GET_of_file(abs_local_file_path, db_dir, files_table, old_sha1_shoul
     update_row_revision(files_table, file_name, rev)
 
 
-def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filename_patterns, files_table, file_name, server_details, requests_session):
+def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, files_table, file_name, server_details, requests_session):
     if not os.path.exists(abs_local_file_path):
         os.makedirs(abs_local_file_path)
     curr_rmt_rev = get_revision_for_remote_directory(requests_session, server_details, file_name)
@@ -733,7 +733,7 @@ def process_GET_of_directory(abs_local_file_path, curr_local_rev, excluded_filen
             requests_session, server_details, dir)
 
 
-def perform_local_deletes_per_instructions(files_table, absolute_local_root_path):
+def local_deletes(files_table, absolute_local_root_path):
 
     my_trace(2,  " ---> perform_local_deletes_per_instructions - start")
 
@@ -854,7 +854,7 @@ def extract_path_from_baseline_rel_path(server_details, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def perform_PUTs_per_instructions(requests_session, files_table, server_details, absolute_local_root_path, db_dir):
+def svn_PUTs(requests_session, files_table, server_details, absolute_local_root_path, db_dir):
 
     my_trace(2,  " ---> perform_PUTs_per_instructions - start")
 
@@ -894,8 +894,8 @@ def perform_PUTs_per_instructions(requests_session, files_table, server_details,
                         num_rows = num_rows -1
                         update_instruction_in_table(files_table, None, rel_file_name)
                     else:
-                        dirs_made += put_item_in_remote_subversion_directory(requests_session, abs_local_file_path, server_details, absolute_local_root_path, files_table,
-                                                                         row['RS'], db_dir)  # <h1>Created</h1>
+                        dirs_made += PUT_file(requests_session, abs_local_file_path, server_details, absolute_local_root_path, files_table,
+                                              row['RS'], db_dir)  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
@@ -1408,11 +1408,11 @@ def main(argv):
 
                         # Act on existing instructions (if any)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        perform_GETs_per_instructions(requests_session, excluded_filename_patterns, files_table, server_details, args.absolute_local_root_path, db_dir)
+                        svn_GETS(requests_session, excluded_filename_patterns, files_table, server_details, args.absolute_local_root_path, db_dir)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        perform_local_deletes_per_instructions(files_table, args.absolute_local_root_path)
+                        local_deletes(files_table, args.absolute_local_root_path)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
-                        possible_clash_encountered = perform_PUTs_per_instructions(requests_session, files_table, server_details, args.absolute_local_root_path, db_dir)
+                        possible_clash_encountered = svn_PUTs(requests_session, files_table, server_details, args.absolute_local_root_path, db_dir)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         perform_DELETEs_on_remote_subversion_server_per_instructions(requests_session, files_table, server_details)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

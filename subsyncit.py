@@ -241,6 +241,43 @@ class MyRequestsTracer():
                 self.rq_debug("R.OPTIONS : [" + str(status) + "] " +  urlparse(url).path + " " + self.data_print(data) + " " + english_duration(durn))
 
 
+    def svn_revision(self, config, file_name):
+        start = time.time()
+        status = 0
+        try:
+            options = self.delegate.request('OPTIONS', config.args.svn_url + esc(file_name),
+                                               data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
+
+            if options.status_code != 200:
+                raise UnexpectedStatusCode(options.status_code)
+
+            youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
+
+            path = "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path
+            propfind = self.delegate.request("PROPFIND", config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path + path, 1)
+                                                 + file_name,
+                                                 data='<?xml version="1.0" encoding="utf-8"?>'
+                                                      '<propfind xmlns="DAV:">'
+                                                      '<prop>'
+                                                      '<version-name/>'
+                                                      '</prop>'
+                                                      '</propfind>',
+                                                 headers={'Depth': '1'})
+
+            content = propfind.text
+
+            if propfind.status_code != 207:
+                raise UnexpectedStatusCode(propfind.status_code)
+
+            rev = int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
+            status = propfind.status_code
+            return rev
+        finally:
+            durn = time.time() - start
+            if durn > .5 or self.always_print:
+                self.rq_debug("R.OPTSPROP : [" + str(status) + "] " +  file_name + " " + english_duration(durn))
+
+
     def report(self, url, youngest_rev):
         start = time.time()
         status = 0
@@ -511,7 +548,7 @@ def svn_MKCOL(requests_session, dir, config):
     request = requests_session.mkcol(config.args.svn_url + dir.replace(os.sep, "/"))
     rc = request.status_code
     if rc == 201:
-        return svn_revision(requests_session, config, dir.replace(os.sep, "/"))
+        return requests_session.svn_revision(config, dir.replace(os.sep, "/"))
     raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
 
 
@@ -668,36 +705,6 @@ def extract_name_type_rev(entry_xml_element):
     return file_or_dir, file_name, rev
 
 
-def svn_revision(requests_session, config, file_name):
-
-    options = requests_session.options(config.args.svn_url + esc(file_name),
-                               data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
-
-    if options.status_code != 200:
-        raise UnexpectedStatusCode(options.status_code)
-
-    youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
-
-    path = "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path
-    propfind = requests_session.propfind(config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path + path, 1)
-                                         + file_name,
-                                         data='<?xml version="1.0" encoding="utf-8"?>'
-                                              '<propfind xmlns="DAV:">'
-                                              '<prop>'
-                                              '<version-name/>'
-                                              '</prop>'
-                                              '</propfind>',
-                                         depth=1)
-
-    content = propfind.text
-
-    if propfind.status_code != 207:
-        raise UnexpectedStatusCode(propfind.status_code)
-
-    i = int(str([line for line in content.splitlines() if ':version-name>' in line]).split(">")[1].split("<")[0])
-    return i
-
-
 def svn_GETs(config, requests_session, excluded_filename_patterns):
 
     my_trace(2,  " ---> perform_GETs_per_instructions - start")
@@ -779,7 +786,7 @@ def GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, request
 def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, file_name, config, requests_session):
     if not os.path.exists(abs_local_file_path):
         os.makedirs(abs_local_file_path)
-    curr_rmt_rev = svn_revision(requests_session, config, file_name)
+    curr_rmt_rev = requests_session.svn_revision(config, file_name)
     if curr_local_rev != curr_rmt_rev:
         update_row_revision(config.files_table, file_name, curr_rmt_rev)
         instruct_to_reGET_parent_if_there(config, file_name)

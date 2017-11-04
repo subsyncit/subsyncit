@@ -244,6 +244,7 @@ class MyRequestsTracer():
     def svn_revision(self, config, file_name):
         start = time.time()
         status = 0
+        url = ""
         try:
             options = self.delegate.request('OPTIONS', config.args.svn_url + esc(file_name),
                                                data='<?xml version="1.0" encoding="utf-8"?><D:options xmlns:D="DAV:"><D:activity-collection-set></D:activity-collection-set></D:options>')
@@ -253,16 +254,16 @@ class MyRequestsTracer():
 
             youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
-            path = "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path
-            propfind = self.delegate.request("PROPFIND", config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path + path, 1)
-                                                 + file_name,
-                                                 data='<?xml version="1.0" encoding="utf-8"?>'
+            url = config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path
+                                              + "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path, 1)
+            propfind = self.delegate.request("PROPFIND", url + file_name,
+                                             data='<?xml version="1.0" encoding="utf-8"?>'
                                                       '<propfind xmlns="DAV:">'
                                                       '<prop>'
                                                       '<version-name/>'
                                                       '</prop>'
                                                       '</propfind>',
-                                                 headers={'Depth': '1'})
+                                             headers={'Depth': '1'})
 
             content = propfind.text
 
@@ -275,7 +276,7 @@ class MyRequestsTracer():
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                self.rq_debug("R.OPTSPROP : [" + str(status) + "] " +  file_name + " " + english_duration(durn))
+                self.rq_debug("R.OPTSPROP: [" + str(status) + "] " +  urlparse(url).path + " " + english_duration(durn))
 
 
     def report(self, url, youngest_rev):
@@ -1285,7 +1286,8 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
 
         try:
             state.online = True
-            config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
+            if not config.svn_repo_parent_path:
+                config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
 
             if root_revision_on_remote_svn_repo != None:
                 if state.iteration == 0:  # At boot time only for now
@@ -1414,7 +1416,6 @@ def main(argv):
 
     state = State(config.db_dir)
 
-    notification_handler = NUllObject()
     file_system_watcher = NUllObject()
     if config.args.do_fs_event_listener:
         if sys.platform == "linux" or sys.platform == "linux2":

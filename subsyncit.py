@@ -1257,6 +1257,51 @@ def make_hidden_on_windows_too(path):
         ret = ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
 
 
+def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queue, requests_session):
+    (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = \
+        svn_details(requests_session, config, "", config.db_dir)  # root
+    config.svn_baseline_rel_path = svn_baseline_rel_path
+    if root_revision_on_remote_svn_repo > 0:
+
+        try:
+            state.online = True
+            config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
+
+            if root_revision_on_remote_svn_repo != None:
+                if state.iteration == 0:  # At boot time only for now
+                    excluded_filename_patterns.update_exclusions(requests_session, config)
+
+                if config.args.do_file_system_scan:
+                    scan_start_time = int(time.time())
+                    scan_for_any_missed_adds_and_changes(config, excluded_filename_patterns, state)
+                    scan_for_any_missed_deletes(config, state)
+                    state.last_scanned = scan_start_time
+
+                # Act on existing instructions (if any)
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                svn_GETs(requests_session, excluded_filename_patterns, config)
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                local_deletes(config)
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                possible_clash_encountered = svn_PUTs(requests_session, config, config.db_dir)
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                svn_DELETEs(requests_session, config)
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                # Actions indicated by Subversion server next, only if root revision is different
+                if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
+                    svn_files = svn_dir_list(requests_session, config, "")
+                    create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, svn_files, "")
+                    # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, config.db_dir)
+                    state.last_root_revision = root_revision_on_remote_svn_repo
+                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+        except requests.packages.urllib3.exceptions.NewConnectionError as e:
+            write_error(config.db_dir, "NewConnectionError: " + repr(e))
+        except requests.exceptions.ConnectionError as e:
+            write_error(config.db_dir, "ConnectionError: " + repr(e))
+    else:
+        state.online = False
+
+
 def main(argv):
 
     if os.name != 'nt':
@@ -1370,56 +1415,11 @@ def main(argv):
     try:
         while should_subsynct_keep_going(file_system_watcher, config.args.absolute_local_root_path):
 
-# excluded_filename_patterns, files_table
-
             # Recreating a session per iteration is good given use could be changing
             # connection to the internet as they move around (office, home, wifi, 3G)
             requests_session = make_requests_session(config.auth, verifySetting)
 
-            (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = \
-                svn_details(requests_session, config, "", config.db_dir) # root
-
-            config.svn_baseline_rel_path = svn_baseline_rel_path
-
-            if root_revision_on_remote_svn_repo > 0:
-
-                try:
-                    state.online = True
-                    config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
-
-                    if root_revision_on_remote_svn_repo != None:
-                        if state.iteration == 0: # At boot time only for now
-                            excluded_filename_patterns.update_exclusions(requests_session, config)
-
-                        if config.args.do_file_system_scan:
-                            scan_start_time = int(time.time())
-                            scan_for_any_missed_adds_and_changes(config, excluded_filename_patterns, state)
-                            scan_for_any_missed_deletes(config, state)
-                            state.last_scanned = scan_start_time
-
-                        # Act on existing instructions (if any)
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                        svn_GETs(requests_session, excluded_filename_patterns, config)
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                        local_deletes(config)
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                        possible_clash_encountered = svn_PUTs(requests_session, config, config.db_dir)
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                        svn_DELETEs(requests_session, config)
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                        # Actions indicated by Subversion server next, only if root revision is different
-                        if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
-                            svn_files = svn_dir_list(requests_session, config, "")
-                            create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, svn_files, "")
-                            # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, config.db_dir)
-                            state.last_root_revision = root_revision_on_remote_svn_repo
-                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                except requests.packages.urllib3.exceptions.NewConnectionError as e:
-                    write_error(config.db_dir, "NewConnectionError: " + repr(e))
-                except requests.exceptions.ConnectionError as e:
-                    write_error(config.db_dir, "ConnectionError: " + repr(e))
-            else:
-                    state.online = False
+            loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queue, requests_session)
 
             state.save_if_changed()
 

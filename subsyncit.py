@@ -118,7 +118,7 @@ class MyRequestsTracer():
         }
 
 
-    def anything_happened(self):
+    def anything_substantial_happened(self):
         return self.counts["mkcol"] > 0 or self.counts["put"] > 0 or self.counts["get"] > 0 or self.counts["delete"] > 0
 
 
@@ -376,8 +376,10 @@ class Config(object):
 
 class State(object):
 
-    def __init__(self):
+    def __init__(self, db_dir):
         self.online = False
+        self.db_dir = db_dir
+        self.previously = ""
 
     def __str__(self):
         return "online: " + str(self.online)
@@ -385,10 +387,11 @@ class State(object):
     def toJSON(self):
         return '{"online": ' + str(self.online).lower() + '}'
 
-class LastStatus(object):
-
-    def __init__(self):
-        self.string = ""
+    def save_if_changed(self):
+        json = self.toJSON()
+        if json != self.previously:
+            with open(self.db_dir + "status.json", "w") as text_file:
+                text_file.write(json)
 
 
 class ExcludedPatternNames(object):
@@ -1382,14 +1385,11 @@ def main(argv):
         file_system_watcher.daemon = True
         file_system_watcher.start()
 
-    last_status = LastStatus()
-
     iteration = 0
     last_scanned = 0
 
     config = Config()
-    state = State()
-    state.online = False
+    state = State(db_dir)
 
     config.svn_url = args.svn_url
 
@@ -1450,14 +1450,9 @@ def main(argv):
             else:
                     state.online = False
 
-            status_str = str(state)
-            if status_str != last_status.string:
-                last_status.string = status_str
-                status_file = db_dir + "status.json"
-                with open(status_file, "w") as text_file:
-                    text_file.write(state.toJSON())
+            state.save_if_changed()
 
-            if not requests_session.anything_happened():
+            if not requests_session.anything_substantial_happened():
                 time.sleep(args.sleep_secs)
                 requests_session.clear_counts()
 

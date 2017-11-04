@@ -370,6 +370,7 @@ class Config(object):
 
     def __init__(self):
         self.args = None
+        self.files_table = None
         self.svn_baseline_rel_path = None
         self.svn_repo_parent_path = None
 
@@ -566,8 +567,8 @@ def PUT_file(requests_session, abs_local_file_path, config, absolute_local_root_
     return dirs_made
 
 
-def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                                                                            files_on_svn_server, prefix):
+def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns,
+                                                       files_on_svn_server, prefix):
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
@@ -576,7 +577,7 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
     start = time.time()
     unprocessed_files = {}
 
-    rows = files_table.search(Query().I == None) # TODO - should mask out Instructed ones??
+    rows = config.files_table.search(Query().I == None) # TODO - should mask out Instructed ones??
     for row in rows:
         file_name = row['FN']
         if not excluded_filename_patterns.should_be_excluded(file_name)\
@@ -606,11 +607,11 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
             if match["I"] != None:
                 continue
             if not match['RS'] == sha1:
-                update_instruction_in_table(files_table, GET_FROM_SERVER, file_name)
+                update_instruction_in_table(config.files_table, GET_FROM_SERVER, file_name)
                 print("GET " + file_name)
                 get_count += 1
         else:
-            upsert_row_in_table(files_table, file_name, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
+            upsert_row_in_table(config.files_table, file_name, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
             print ("GET " + file_name)
             get_count += 1
 
@@ -619,7 +620,7 @@ def create_GET_and_local_delete_instructions_after_comparison_to_files_on_subver
     # files still in the unprocessed_files list are not up on Subversion
     for file_name, val in unprocessed_files.items():
         local_deletes += 1
-        update_instruction_in_table(files_table, DELETE_LOCALLY, file_name)
+        update_instruction_in_table(config.files_table, DELETE_LOCALLY, file_name)
 
     section_end(get_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
           + " local deletes (comparison of all the files on the Subversion server to files in the sync dir) took %s.", start)
@@ -683,7 +684,7 @@ def svn_revision(requests_session, config, file_name):
     return i
 
 
-def svn_GETs(requests_session, excluded_filename_patterns, files_table, config, db_dir):
+def svn_GETs(requests_session, excluded_filename_patterns, config):
 
     my_trace(2,  " ---> perform_GETs_per_instructions - start")
     more_to_do = True
@@ -698,7 +699,7 @@ def svn_GETs(requests_session, excluded_filename_patterns, files_table, config, 
         file_count = 0
 
         try:
-            rows = files_table.search(Query().I == GET_FROM_SERVER)
+            rows = config.files_table.search(Query().I == GET_FROM_SERVER)
             num_rows = len(rows)
             if len(rows) > 3:
                 my_trace(2,  ": " + str(len(rows)) + " GETs to perform on remote Subversion server...")
@@ -710,12 +711,12 @@ def svn_GETs(requests_session, excluded_filename_patterns, files_table, config, 
                 abs_local_file_path = (config.args.absolute_local_root_path + file_name)
                 head = requests_session.head(config.args.svn_url + esc(file_name))
                 if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-                    GET_dir(abs_local_file_path, curr_rev, excluded_filename_patterns, files_table, file_name, config, requests_session)
+                    GET_dir(abs_local_file_path, curr_rev, excluded_filename_patterns, file_name, config, requests_session)
                 else:
-                    GET_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, config, requests_session)
+                    GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
                     file_count += 1
-                update_instruction_in_table(files_table, None, file_name)
-                instruct_to_reGET_parent_if_there(files_table, file_name)
+                update_instruction_in_table(config.files_table, None, file_name)
+                instruct_to_reGET_parent_if_there(config, file_name)
 
         finally:
 
@@ -727,18 +728,17 @@ def svn_GETs(requests_session, excluded_filename_patterns, files_table, config, 
     my_trace(2,  " ---> perform_GETs_per_instructions - end")
 
 
-
-def instruct_to_reGET_parent_if_there(files_table, file_name):
+def instruct_to_reGET_parent_if_there(config, file_name):
     parent = dirname(file_name)
     if parent and parent != "":
-        parent_row = files_table.get(Query().FN == parent)
+        parent_row = config.files_table.get(Query().FN == parent)
         if parent_row and parent_row['I'] == None:
-            update_instruction_in_table(files_table, GET_FROM_SERVER, parent)
+            update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
 
 
-def GET_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_name, config, requests_session):
+def GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session):
     (rev, sha1, svn_baseline_rel_path_not_used) \
-        = svn_details(requests_session, config, file_name, db_dir)
+        = svn_details(requests_session, config, file_name, config.db_dir)
     get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
     # debug(absolute_local_root_path + file_name + ": GET " + str(get.status_code) + " " + str(rev))
     # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
@@ -758,30 +758,30 @@ def GET_file(abs_local_file_path, db_dir, files_table, old_sha1_should_be, file_
         size_ts = osstat.st_size + osstat.st_mtime
     except FileNotFoundError:
         size_ts = 0 # test_a_deleted_file_syncs_back stimulates this
-    update_row_shas_size_and_timestamp(files_table, file_name, sha1, size_ts)
-    update_row_revision(files_table, file_name, rev)
+    update_row_shas_size_and_timestamp(config.files_table, file_name, sha1, size_ts)
+    update_row_revision(config.files_table, file_name, rev)
 
 
-def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, files_table, file_name, config, requests_session):
+def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, file_name, config, requests_session):
     if not os.path.exists(abs_local_file_path):
         os.makedirs(abs_local_file_path)
     curr_rmt_rev = svn_revision(requests_session, config, file_name)
     if curr_local_rev != curr_rmt_rev:
-        update_row_revision(files_table, file_name, curr_rmt_rev)
-        instruct_to_reGET_parent_if_there(files_table, file_name)
+        update_row_revision(config.files_table, file_name, curr_rmt_rev)
+        instruct_to_reGET_parent_if_there(config, file_name)
 
         dir = esc(file_name) + "/"
-        create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(
-            files_table, excluded_filename_patterns, svn_dir_list(requests_session, config, dir), dir)
+        dir_list = svn_dir_list(requests_session, config, dir)
+        create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, dir)
 
 
-def local_deletes(files_table, config):
+def local_deletes(config):
 
     my_trace(2,  " ---> perform_local_deletes_per_instructions - start")
 
     start = time.time()
 
-    rows = files_table.search(Query().I == DELETE_LOCALLY)
+    rows = config.files_table.search(Query().I == DELETE_LOCALLY)
 
     deletes = 0
     try:
@@ -791,8 +791,8 @@ def local_deletes(files_table, config):
             try:
                 os.remove(name)
                 deletes += 1
-                files_table.remove(Query().FN == file_name)
-                instruct_to_reGET_parent_if_there(files_table, file_name)
+                config.files_table.remove(Query().FN == file_name)
+                instruct_to_reGET_parent_if_there(config, file_name)
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
@@ -896,7 +896,7 @@ def extract_path_from_baseline_rel_path(config, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def svn_PUTs(requests_session, files_table, config, db_dir):
+def svn_PUTs(requests_session, config, db_dir):
 
     my_trace(2,  " ---> perform_PUTs_per_instructions - start")
 
@@ -914,7 +914,7 @@ def svn_PUTs(requests_session, files_table, config, db_dir):
         dirs_made = 0
         not_actually_changed = 0
         try:
-            rows = files_table.search(Query().I == PUT_ON_SERVER)
+            rows = config.files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
             if len(rows) > 0:
                 my_trace(2,  ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
@@ -934,25 +934,25 @@ def svn_PUTs(requests_session, files_table, config, db_dir):
                         # don't do it.
 
                         num_rows = num_rows -1
-                        update_instruction_in_table(files_table, None, rel_file_name)
+                        update_instruction_in_table(config.files_table, None, rel_file_name)
                     else:
-                        dirs_made += PUT_file(requests_session, abs_local_file_path, config, config.args.absolute_local_root_path, files_table,
+                        dirs_made += PUT_file(requests_session, abs_local_file_path, config, config.args.absolute_local_root_path, config.files_table,
                                               row['RS'], db_dir)  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(requests_session, files_table, rel_file_name, new_local_sha1, config, size_ts)
-                        instruct_to_reGET_parent_if_there(files_table, rel_file_name)
+                        update_sha_and_revision_for_row(requests_session, config.files_table, rel_file_name, new_local_sha1, config, size_ts)
+                        instruct_to_reGET_parent_if_there(config, rel_file_name)
                         put_count += 1
-                        update_instruction_in_table(files_table, None, rel_file_name)
+                        update_instruction_in_table(config.files_table, None, rel_file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
                     # Let another cycle get back to the and the GET to win.
                     not_actually_changed += 1
                     possible_clash_encountered = True
-                    update_instruction_in_table(files_table, None, rel_file_name)
+                    update_instruction_in_table(config.files_table, None, rel_file_name)
                 except NotPUTtingAsFileStillBeingWrittenTo as e:
                     not_actually_changed += 1
-                    update_instruction_in_table(files_table, None, rel_file_name)
+                    update_instruction_in_table(config.files_table, None, rel_file_name)
                 except NotPUTtingAsTheServerObjected as e:
                     not_actually_changed += 1
                     if "txn-current-lock': Permission denied" in e.message:
@@ -1003,13 +1003,13 @@ def update_sha_and_revision_for_row(requests_session, files_table, file_name, lo
         }, Query().FN == file_name)
 
 
-def svn_DELETEs(requests_session, files_table, config):
+def svn_DELETEs(requests_session, config):
 
     my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - start")
 
     start = time.time()
 
-    rows = files_table.search(Query().I == DELETE_ON_SERVER)
+    rows = config.files_table.search(Query().I == DELETE_ON_SERVER)
 
     files_deleted = 0
     directories_deleted = 0
@@ -1020,15 +1020,15 @@ def svn_DELETEs(requests_session, files_table, config):
         # debug(row['FN'] + ": DELETE " + str(requests_delete.status_code))
         if row['T'] == 'F':
             files_deleted += 1
-            files_table.remove(Query().FN == row['FN'])
+            config.files_table.remove(Query().FN == row['FN'])
         else:
             directories_deleted += 1
-            files_table.remove(Query().FN == row['FN'])
+            config.files_table.remove(Query().FN == row['FN'])
             # TODO LIKE
 
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
             print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
-        instruct_to_reGET_parent_if_there(files_table, rfn)
+        instruct_to_reGET_parent_if_there(config, rfn)
 
     speed = "."
     if len(rows) > 0:
@@ -1097,7 +1097,7 @@ def write_error(db_dir, msg):
     make_hidden_on_windows_too(subsyncit_err)
 
 
-def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue):
+def transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue):
 
     my_trace(2,  " ---> transform_enqueued_actions_into_instructions - start")
 
@@ -1107,20 +1107,20 @@ def transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_de
     while len(local_adds_chgs_deletes_queue) > 0:
         (file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
-            upsert_row_in_table(files_table, file_name, 0, "dir", instruction=MAKE_DIR_ON_SERVER)
+            upsert_row_in_table(config.files_table, file_name, 0, "dir", instruction=MAKE_DIR_ON_SERVER)
         elif action == "add_file":
-            in_subversion = file_is_in_subversion(files_table, file_name)
+            in_subversion = file_is_in_subversion(config.files_table, file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
                 # print("File to add: " + file_name + " is not in subversion")
-                upsert_row_in_table(files_table, file_name, 0, "file", instruction=PUT_ON_SERVER)
+                upsert_row_in_table(config.files_table, file_name, 0, "file", instruction=PUT_ON_SERVER)
         elif action == "change":
-            update_instruction_in_table(files_table, PUT_ON_SERVER, file_name)
+            update_instruction_in_table(config.files_table, PUT_ON_SERVER, file_name)
         elif action == "delete":
-            in_subversion = file_is_in_subversion(files_table, file_name)
+            in_subversion = file_is_in_subversion(config.files_table, file_name)
             # 'svn up' can delete a file, causing watchdog to trigger a delete notification .. to be ignored
             if in_subversion:
-                update_instruction_in_table(files_table, DELETE_ON_SERVER, file_name)
+                update_instruction_in_table(config.files_table, DELETE_ON_SERVER, file_name)
         else:
             raise Exception("Unknown action " + action)
 
@@ -1152,7 +1152,7 @@ def scantree(path):
             yield entry
 
 
-def scan_for_any_missed_adds_and_changes(files_table, config, excluded_filename_patterns, state):
+def scan_for_any_missed_adds_and_changes(config, excluded_filename_patterns, state):
 
     my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - start")
 
@@ -1174,17 +1174,17 @@ def scan_for_any_missed_adds_and_changes(files_table, config, excluded_filename_
         if excluded_filename_patterns.should_be_excluded(file_name):
             continue
 
-        row = files_table.get(Query().FN == file_name)
+        row = config.files_table.get(Query().FN == file_name)
         in_subversion = row and row['RS'] != None
         if row and row['I'] != None:
             continue
         if not in_subversion:
-            upsert_row_in_table(files_table, file_name, 0, 'F', PUT_ON_SERVER)
+            upsert_row_in_table(config.files_table, file_name, 0, 'F', PUT_ON_SERVER)
             to_add += 1
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
             if size_ts != row["ST"]:
-                update_instruction_in_table(files_table, PUT_ON_SERVER, file_name)
+                update_instruction_in_table(config.files_table, PUT_ON_SERVER, file_name)
                 to_change += 1
 
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
@@ -1194,7 +1194,7 @@ def scan_for_any_missed_adds_and_changes(files_table, config, excluded_filename_
 
     return to_add + to_change
 
-def scan_for_any_missed_deletes(files_table, config, state):
+def scan_for_any_missed_deletes(config, state):
 
     my_trace(2,  " ---> enqueue_any_missed_deletes - start")
 
@@ -1202,7 +1202,7 @@ def scan_for_any_missed_deletes(files_table, config, state):
     to_delete = 0
 
     file = Query()
-    for row in files_table.search((file.I == None) & (file.RS != None)):
+    for row in config.files_table.search((file.I == None) & (file.RS != None)):
         if state.is_shutting_down:
             break
         if to_delete > 100:
@@ -1210,7 +1210,7 @@ def scan_for_any_missed_deletes(files_table, config, state):
 
         file_name = row['FN']
         if not os.path.exists(config.args.absolute_local_root_path + file_name) and row['I'] == None:
-            update_instruction_in_table(files_table, DELETE_ON_SERVER, file_name)
+            update_instruction_in_table(config.files_table, DELETE_ON_SERVER, file_name)
             to_delete += 1
 
     section_end(to_delete > 0,  ": " + str(to_delete)
@@ -1319,15 +1319,15 @@ def main(argv):
         os.mkdir(subsyncit_settings_dir)
     make_hidden_on_windows_too(subsyncit_settings_dir)
 
-    db_dir = subsyncit_settings_dir + os.sep + config.args.absolute_local_root_path.replace("/","%47").replace(":","%58").replace("\\","%92") + "/"
+    config.db_dir = subsyncit_settings_dir + os.sep + config.args.absolute_local_root_path.replace("/","%47").replace(":","%58").replace("\\","%92") + "/"
 
-    if not os.path.exists(db_dir):
-        os.mkdir(db_dir)
+    if not os.path.exists(config.db_dir):
+        os.mkdir(config.db_dir)
 
-    db = TinyDB(db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
-    files_table  = MyTinyDBTrace(db.table('files'))
+    db = TinyDB(config.db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
+    config.files_table  = MyTinyDBTrace(db.table('files'))
 
-    with open(db_dir + os.sep + "INFO.TXT", "w") as text_file:
+    with open(config.db_dir + os.sep + "INFO.TXT", "w") as text_file:
         text_file.write(config.args.absolute_local_root_path + "is the Subsyncit path that this pertains to")
 
     local_adds_chgs_deletes_queue = IndexedSet()
@@ -1347,7 +1347,7 @@ def main(argv):
 
     excluded_filename_patterns = ExcludedPatternNames()
 
-    state = State(db_dir)
+    state = State(config.db_dir)
 
     notification_handler = NUllObject()
     file_system_watcher = NUllObject()
@@ -1370,12 +1370,14 @@ def main(argv):
     try:
         while should_subsynct_keep_going(file_system_watcher, config.args.absolute_local_root_path):
 
+# excluded_filename_patterns, files_table
+
             # Recreating a session per iteration is good given use could be changing
             # connection to the internet as they move around (office, home, wifi, 3G)
             requests_session = make_requests_session(config.auth, verifySetting)
 
             (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = \
-                svn_details(requests_session, config, "", db_dir) # root
+                svn_details(requests_session, config, "", config.db_dir) # root
 
             config.svn_baseline_rel_path = svn_baseline_rel_path
 
@@ -1391,32 +1393,31 @@ def main(argv):
 
                         if config.args.do_file_system_scan:
                             scan_start_time = int(time.time())
-                            scan_for_any_missed_adds_and_changes(files_table, config, excluded_filename_patterns, state)
-                            scan_for_any_missed_deletes(files_table, config, state)
+                            scan_for_any_missed_adds_and_changes(config, excluded_filename_patterns, state)
+                            scan_for_any_missed_deletes(config, state)
                             state.last_scanned = scan_start_time
 
                         # Act on existing instructions (if any)
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
-                        svn_GETs(requests_session, excluded_filename_patterns, files_table, config, db_dir)
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
-                        local_deletes(files_table, config)
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
-                        possible_clash_encountered = svn_PUTs(requests_session, files_table, config, db_dir)
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
-                        svn_DELETEs(requests_session, files_table, config)
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                        svn_GETs(requests_session, excluded_filename_patterns, config)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                        local_deletes(config)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                        possible_clash_encountered = svn_PUTs(requests_session, config, config.db_dir)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                        svn_DELETEs(requests_session, config)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                         # Actions indicated by Subversion server next, only if root revision is different
                         if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
-                            create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(files_table, excluded_filename_patterns,
-                                                                                                                    svn_dir_list(requests_session, config, ""),
-                                                                                                                    "")
-                            # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, db_dir)
+                            svn_files = svn_dir_list(requests_session, config, "")
+                            create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, svn_files, "")
+                            # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, config.db_dir)
                             state.last_root_revision = root_revision_on_remote_svn_repo
-                        transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
+                        transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 except requests.packages.urllib3.exceptions.NewConnectionError as e:
-                    write_error(db_dir, "NewConnectionError: " + repr(e))
+                    write_error(config.db_dir, "NewConnectionError: " + repr(e))
                 except requests.exceptions.ConnectionError as e:
-                    write_error(db_dir, "ConnectionError: " + repr(e))
+                    write_error(config.db_dir, "ConnectionError: " + repr(e))
             else:
                     state.online = False
 
@@ -1427,12 +1428,12 @@ def main(argv):
                 requests_session.clear_counts()
 
     except NoConnection as e:
-        write_error(db_dir, e.message)
+        write_error(config.db_dir, e.message)
 
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
 
-    transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue)
+    transform_enqueued_actions_into_instructions(config.files_table, local_adds_chgs_deletes_queue)
 
     try:
         file_system_watcher.stop()
@@ -1448,7 +1449,7 @@ def main(argv):
     debug = False
 
     if debug:
-        print_rows(files_table)
+        print_rows(config.files_table)
 
 if __name__ == "__main__":
 

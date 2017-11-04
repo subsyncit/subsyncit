@@ -380,13 +380,15 @@ class State(object):
         self.online = False
         self.db_dir = db_dir
         self.iteration = 0
+        self.last_scanned = 0
         self.previously = ""
 
     def __str__(self):
-        return "online: " + str(self.online)
+        return "online: " + str(self.online) + ", last_scanned: " + str(self.last_scanned)
 
     def toJSON(self):
-        return '{"online": ' + str(self.online).lower() + '}'
+        strftime('%Y-%m-%d %H:%M:%S')
+        return '{"online": ' + str(self.online).lower() + ', "last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "iteration": ' + str(self.iteration) + '}'
 
     def save_if_changed(self):
         self.iteration += 1
@@ -1151,7 +1153,7 @@ def scantree(path):
             yield entry
 
 
-def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute_local_root_path, excluded_filename_patterns, last_scanned):
+def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute_local_root_path, excluded_filename_patterns, state):
 
     my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - start")
 
@@ -1164,7 +1166,7 @@ def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute
             break
         if to_add + to_change > 100:
             break
-        if entry.stat().st_mtime < last_scanned:
+        if entry.stat().st_mtime < state.last_scanned:
             continue
 
         abs_local_file_path = entry.path
@@ -1193,7 +1195,7 @@ def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute
 
     return to_add + to_change
 
-def scan_for_any_missed_deletes(is_shutting_down, files_table, absolute_local_root_path, last_scanned_path):
+def scan_for_any_missed_deletes(is_shutting_down, files_table, absolute_local_root_path):
 
     my_trace(2,  " ---> enqueue_any_missed_deletes - start")
 
@@ -1254,27 +1256,6 @@ def make_hidden_on_windows_too(path):
     if os.name == 'nt':
         FILE_ATTRIBUTE_HIDDEN = 0x02
         ret = ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
-
-
-def update_last_scanned_if_needed(db_dir, scan_start_time, to_add_chg_or_del):
-    if to_add_chg_or_del == 0:
-        with open(db_dir + os.sep + "last_scanned", "w") as last_scanned_f:
-            last_scanned_f.write(str(scan_start_time))
-
-
-def get_last_scanned_if_needed(db_dir, last_scanned):
-    if last_scanned > 0:
-        return last_scanned
-    last_scanned_path = db_dir + os.sep + "last_scanned"
-    if not os.path.exists(last_scanned_path):
-        with open(last_scanned_path, "w") as last_scanned_f:
-            last_scanned_f.write("0")
-    with open(last_scanned_path, "r") as last_scanned_f:
-        read = last_scanned_f.read().strip()
-
-        last_scanned = int(read)
-    return last_scanned
-
 
 
 def main(argv):
@@ -1387,8 +1368,6 @@ def main(argv):
         file_system_watcher.daemon = True
         file_system_watcher.start()
 
-    last_scanned = 0
-
     config = Config()
     state = State(db_dir)
 
@@ -1416,15 +1395,11 @@ def main(argv):
                         if state.iteration == 0: # At boot time only for now
                             excluded_filename_patterns.update_exclusions(requests_session, config)
 
-                        scan_start_time = int(time.time())
-
-                        last_scanned = get_last_scanned_if_needed(db_dir, last_scanned)
-
                         if args.do_file_system_scan:
-                            to_add_chg_or_del = scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, args.absolute_local_root_path, excluded_filename_patterns, last_scanned) \
-                                            + scan_for_any_missed_deletes(is_shutting_down, files_table, args.absolute_local_root_path, last_scanned)
-
-                            update_last_scanned_if_needed(db_dir, scan_start_time, to_add_chg_or_del)
+                            scan_start_time = int(time.time())
+                            scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, args.absolute_local_root_path, excluded_filename_patterns, state)
+                            scan_for_any_missed_deletes(is_shutting_down, files_table, args.absolute_local_root_path)
+                            state.last_scanned = scan_start_time
 
                         # Act on existing instructions (if any)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)

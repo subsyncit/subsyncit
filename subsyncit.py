@@ -45,8 +45,11 @@ import os
 import re
 import sys
 import time
+import traceback
 from os.path import dirname, splitext
 from time import strftime
+from urllib.parse import urlparse
+
 import requests
 import requests.packages.urllib3
 from boltons.setutils import IndexedSet
@@ -128,118 +131,129 @@ class MyRequestsTracer():
         self.counts["get"] = 0
         self.counts["delete"] = 0
 
-    def mkcol(self, arg0):
+    def rq_debug(self, msg):
+        try:
+            st = traceback.extract_stack()
+            methods = []
+            for ste in st:
+                methods.append(ste[2])
+            msg += ", stack: " + ":".join(methods[2:-2])
+        finally:
+            debug(msg)
+
+
+    def mkcol(self, url):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request("MKCOL", arg0)
+            request = self.delegate.request("MKCOL", url)
             status = request.status_code
             return request
         finally:
             self.counts["mkcol"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.MKCOL   : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+               self.rq_debug("R.MKCOL   : [" + str(status) + "] " + urlparse(url).path + " " + english_duration(durn))
 
 
-    def delete(self, arg0):
+    def delete(self, url):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.delete(arg0)
+            request = self.delegate.delete(url)
             status = request.status_code
             return request
         finally:
             self.counts["delete"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.DELETE  : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+                self.rq_debug("R.DELETE  : [" + str(status) + "] " +  urlparse(url).path + " " + english_duration(durn))
 
 
-    def head(self, arg0):
+    def head(self, url):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.head(arg0)
+            request = self.delegate.head(url)
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > 0.5 or self.always_print:
-                debug("Requests.HEAD    : [" + str(status) + "] " + str(arg0) + " " + english_duration(durn))
+                self.rq_debug("R.HEAD    : [" + str(status) + "] " +  urlparse(url).path + " " + english_duration(durn))
 
 
-    def propfind(self, arg0, data, depth=1):
+    def propfind(self, url, data, depth=1):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request("PROPFIND", arg0, data=data, headers={'Depth': str(depth)})
+            request = self.delegate.request("PROPFIND", url, data=data, headers={'Depth': str(depth)})
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.PROPFIND: [" + str(status) + "] " + str(arg0) + " d=" + str(depth) + " " + english_duration(durn))
+                self.rq_debug("R.PROPFIND: [" + str(status) + "] " +  urlparse(url).path + " <that propfind xml/> " + str(depth) + " " + english_duration(durn))
 
 
-    def put(self, arg0, data=None):
+    def put(self, url, data=None):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.put(arg0, data=data)
+            request = self.delegate.put(url, data=data)
             status = request.status_code
             return request
         finally:
             self.counts["put"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.PUT     : [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                self.rq_debug("R.PUT     : [" + str(status) + "] " +  urlparse(url).path + " " + self.data_print(data) + " " + english_duration(durn))
 
 
     def data_print(self, data):
         return str("data.len=" + str(len(data)) if len(data) > 15 else "data=" + str(data))
 
 
-    def get(self, arg0, stream=None):
+    def get(self, url, stream=None):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.get(arg0, stream=stream)
+            request = self.delegate.get(url, stream=stream)
             status = request.status_code
             return request
         finally:
             self.counts["get"] += 1
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                debug("Requests.GET     : [" + str(status) + "] " + str(arg0) + " " + str(stream) + " " + english_duration(durn))
+                self.rq_debug("R.GET     : [" + str(status) + "] " +  urlparse(url).path + " " + str(stream) + " " + english_duration(durn))
 
 
-    def options(self, arg0, data=None):
+    def options(self, url, data=None):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request('OPTIONS', arg0, data=data)
+            request = self.delegate.request('OPTIONS', url, data=data)
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests.OPTIONS : [" + str(status) + "] " + str(arg0) + " " + self.data_print(data) + " " + english_duration(durn))
+                self.rq_debug("R.OPTIONS : [" + str(status) + "] " +  urlparse(url).path + " " + self.data_print(data) + " " + english_duration(durn))
 
 
-    def report(self, arg0, youngest_rev):
+    def report(self, url, youngest_rev):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request('REPORT', arg0, data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
-                                   '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:config.author</S:revprop><S'
+            request = self.delegate.request('REPORT', url, data='<S:log-report xmlns:S="svn:"><S:start-revision>' + youngest_rev +
+                                   '</S:start-revision><S:end-revision>0</S:end-revision><S:limit>1</S:limit><S:revprop>svn:author</S:revprop><S'
                                    ':revprop>svn:date</S:revprop><S:revprop>svn:log</S:revprop><S:path></S:path><S:encode-binary-props/></S:log-report>')
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > .5 or self.always_print:
-                debug("Requests.REPORT  : [" + str(status) + "] " + str(arg0) + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
+                self.rq_debug("R.REPORT  : [" + str(status) + "] " +  urlparse(url).path + " youngest_rev=" + str(youngest_rev) + " " + english_duration(durn))
 
 
 class MyTinyDBTrace():

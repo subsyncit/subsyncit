@@ -379,6 +379,7 @@ class State(object):
     def __init__(self, db_dir):
         self.online = False
         self.db_dir = db_dir
+        self.iteration = 0
         self.previously = ""
 
     def __str__(self):
@@ -388,6 +389,7 @@ class State(object):
         return '{"online": ' + str(self.online).lower() + '}'
 
     def save_if_changed(self):
+        self.iteration += 1
         json = self.toJSON()
         if json != self.previously:
             with open(self.db_dir + "status.json", "w") as text_file:
@@ -1385,7 +1387,6 @@ def main(argv):
         file_system_watcher.daemon = True
         file_system_watcher.start()
 
-    iteration = 0
     last_scanned = 0
 
     config = Config()
@@ -1412,7 +1413,7 @@ def main(argv):
                     config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
 
                     if root_revision_on_remote_svn_repo != None:
-                        if iteration == 0: # At boot time only for now
+                        if state.iteration == 0: # At boot time only for now
                             excluded_filename_patterns.update_exclusions(requests_session, config)
 
                         scan_start_time = int(time.time())
@@ -1456,7 +1457,6 @@ def main(argv):
                 time.sleep(args.sleep_secs)
                 requests_session.clear_counts()
 
-            iteration += 1
     except NoConnection as e:
         write_error(db_dir, e.message)
 

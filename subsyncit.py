@@ -659,14 +659,12 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
                 continue
             if not match['RS'] == sha1:
                 update_instruction_in_table(config.files_table, GET_FROM_SERVER, file_name)
-                print("GET " + file_name)
                 if match['T'] == 'F':
                     get_file_count += 1
                 else:
                     get_dir_count += 1
         else:
             upsert_row_in_table(config.files_table, file_name, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
-            print ("GET " + file_name)
             if sha1:
                 get_file_count += 1
             else:
@@ -678,8 +676,12 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
         local_deletes += 1
         update_instruction_in_table(config.files_table, DELETE_LOCALLY, file_name)
 
-    section_end(get_file_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_file_count) + " GETs and " + str(local_deletes)
-          + " local deletes (comparison of all the files within " + directory + ") took %s.", start)
+    fd = str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+    dc = str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+    ld = str(local_deletes) + " local deletes" if local_deletes > 0 else ""
+
+    section_end(get_file_count > 0 or get_dir_count > 0 or local_deletes > 0,  "Instructions created for"
+                + fd + dc + ld + " (comparison of the dirs/files within " + directory + ") took %s.", start)
 
     my_trace(2,  " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
 

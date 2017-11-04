@@ -65,16 +65,6 @@ DELETE_ON_SERVER = "DS"
 DELETE_LOCALLY = "DL"
 MAKE_DIR_ON_SERVER = "MK"
 
-PROPFIND = '<?xml version="1.0" encoding="utf-8" ?>\n' \
-             '<D:propfind xmlns:D="DAV:">\n' \
-             '<D:prop xmlns:S="http://subversion.tigris.org/xmlns/dav/">\n' \
-             '<S:sha1-checksum/>\n' \
-             '<D:version-name/>\n' \
-             '<S:baseline-relative-path/>\n' \
-             '</D:prop>\n' \
-             '</D:propfind>\n'
-
-
 def debug(message):
     print(strftime('%Y-%m-%d %H:%M:%S') + ": " + message)
 
@@ -183,17 +173,24 @@ class MyRequestsTracer():
                 self.rq_debug("R.HEAD    : [" + str(status) + "] " +  urlparse(url).path + " " + english_duration(durn))
 
 
-    def propfind(self, url, data, depth=1):
+    def propfind(self, url, depth=1):
         start = time.time()
         status = 0
         try:
-            request = self.delegate.request("PROPFIND", url, data=data, headers={'Depth': str(depth)})
+            request = self.delegate.request("PROPFIND", url, data='<?xml version="1.0" encoding="utf-8" ?>\n' \
+             '<D:propfind xmlns:D="DAV:">\n' \
+             '<D:prop xmlns:S="http://subversion.tigris.org/xmlns/dav/">\n' \
+             '<S:sha1-checksum/>\n' \
+             '<D:version-name/>\n' \
+             '<S:baseline-relative-path/>\n' \
+             '</D:prop>\n' \
+             '</D:propfind>\n', headers={'Depth': str(depth)})
             status = request.status_code
             return request
         finally:
             durn = time.time() - start
             if durn > 1 or self.always_print:
-                self.rq_debug("R.PROPFIND: [" + str(status) + "] " +  urlparse(url).path + " <that propfind xml/> " + str(depth) + " " + english_duration(durn))
+                self.rq_debug("R.PROPFIND: [" + str(status) + "] " +  urlparse(url).path + " depth=" + str(depth) + " " + english_duration(durn))
 
 
     def put(self, url, data=None):
@@ -875,7 +872,7 @@ def get_file_name(config, full_path):
 
 def svn_dir_list(config, requests_session, prefix):
 
-    propfind = requests_session.propfind(config.args.svn_url + esc(prefix), data=PROPFIND, depth=1)
+    propfind = requests_session.propfind(config.args.svn_url + esc(prefix), depth=1)
 
     output = propfind.text
 
@@ -1070,7 +1067,7 @@ def svn_details(config, requests_session, file_name):
         url = config.args.svn_url + esc(file_name).replace("\\", "/")
         if url.endswith("/"):
             url = url[:-1]
-        propfind = requests_session.propfind(url, data=PROPFIND, depth=0)
+        propfind = requests_session.propfind(url, depth=0)
         if 200 <= propfind.status_code <= 299:
             content = propfind.text
 

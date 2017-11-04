@@ -378,6 +378,7 @@ class State(object):
 
     def __init__(self, db_dir):
         self.online = False
+        self.is_shutting_down = False
         self.db_dir = db_dir
         self.iteration = 0
         self.last_scanned = 0
@@ -435,9 +436,9 @@ class ExcludedPatternNames(object):
 
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
-    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher, is_shutting_down, excluded_patterns):
+    def __init__(self, local_adds_chgs_deletes_queue, absolute_local_root_path, file_system_watcher, state, excluded_patterns):
         super(FileSystemNotificationHandler, self).__init__(ignore_patterns=["*/.*"])
-        self.is_shutting_down = is_shutting_down
+        self.state = state
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
         self.absolute_local_root_path = absolute_local_root_path
         self.file_system_watcher = file_system_watcher
@@ -455,7 +456,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def stop_subsyncit(self, event):
         self.file_system_watcher.stop()
-        self.is_shutting_down.append(True)
+        self.state.is_shutting_down = True
         try:
             self.file_system_watcher.join()
             os.remove(event.src_path)
@@ -1153,7 +1154,7 @@ def scantree(path):
             yield entry
 
 
-def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute_local_root_path, excluded_filename_patterns, state):
+def scan_for_any_missed_adds_and_changes(files_table, absolute_local_root_path, excluded_filename_patterns, state):
 
     my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - start")
 
@@ -1162,7 +1163,7 @@ def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute
     to_add = 0
     to_change = 0
     for entry in scantree(absolute_local_root_path):
-        if True in is_shutting_down:
+        if state.is_shutting_down:
             break
         if to_add + to_change > 100:
             break
@@ -1195,7 +1196,7 @@ def scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, absolute
 
     return to_add + to_change
 
-def scan_for_any_missed_deletes(is_shutting_down, files_table, absolute_local_root_path):
+def scan_for_any_missed_deletes(files_table, absolute_local_root_path, state):
 
     my_trace(2,  " ---> enqueue_any_missed_deletes - start")
 
@@ -1204,7 +1205,7 @@ def scan_for_any_missed_deletes(is_shutting_down, files_table, absolute_local_ro
 
     file = Query()
     for row in files_table.search((file.I == None) & (file.RS != None)):
-        if True in is_shutting_down:
+        if state.is_shutting_down:
             break
         if to_delete > 100:
             break
@@ -1333,7 +1334,6 @@ def main(argv):
     local_adds_chgs_deletes_queue = IndexedSet()
 
     last_root_revision = None
-    is_shutting_down = []
 
     file_system_watcher = None
 
@@ -1350,6 +1350,10 @@ def main(argv):
 
     excluded_filename_patterns = ExcludedPatternNames()
 
+    config = Config()
+    state = State(db_dir)
+    config.svn_url = args.svn_url
+
     notification_handler = NUllObject()
     file_system_watcher = NUllObject()
     if args.do_fs_event_listener:
@@ -1363,15 +1367,10 @@ def main(argv):
             from watchdog.observers.read_directory_changes import WindowsApiObserver
             file_system_watcher = WindowsApiObserver
     
-        notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, is_shutting_down, excluded_filename_patterns)
+        notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, args.absolute_local_root_path, file_system_watcher, state, excluded_filename_patterns)
         file_system_watcher.schedule(notification_handler, args.absolute_local_root_path, recursive=True)
         file_system_watcher.daemon = True
         file_system_watcher.start()
-
-    config = Config()
-    state = State(db_dir)
-
-    config.svn_url = args.svn_url
 
     try:
         while should_subsynct_keep_going(file_system_watcher, args.absolute_local_root_path):
@@ -1397,8 +1396,8 @@ def main(argv):
 
                         if args.do_file_system_scan:
                             scan_start_time = int(time.time())
-                            scan_for_any_missed_adds_and_changes(is_shutting_down, files_table, args.absolute_local_root_path, excluded_filename_patterns, state)
-                            scan_for_any_missed_deletes(is_shutting_down, files_table, args.absolute_local_root_path)
+                            scan_for_any_missed_adds_and_changes(files_table, args.absolute_local_root_path, excluded_filename_patterns, state)
+                            scan_for_any_missed_deletes(files_table, args.absolute_local_root_path, state)
                             state.last_scanned = scan_start_time
 
                         # Act on existing instructions (if any)

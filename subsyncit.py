@@ -382,6 +382,7 @@ class State(object):
         self.db_dir = db_dir
         self.iteration = 0
         self.last_scanned = 0
+        self.last_root_revision = 0
         self.previously = ""
 
     def __str__(self):
@@ -1333,8 +1334,6 @@ def main(argv):
 
     local_adds_chgs_deletes_queue = IndexedSet()
 
-    last_root_revision = None
-
     file_system_watcher = None
 
     class NUllObject(object):
@@ -1411,12 +1410,12 @@ def main(argv):
                         svn_DELETEs(requests_session, files_table, config)
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                         # Actions indicated by Subversion server next, only if root revision is different
-                        if root_revision_on_remote_svn_repo != last_root_revision or possible_clash_encountered:
+                        if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
                             create_GET_and_local_delete_instructions_after_comparison_to_files_on_subversion_server(args.absolute_local_root_path, files_table, excluded_filename_patterns,
                                                                                                                     svn_dir_list(requests_session, config, ""),
                                                                                                                     requests_session, config, "")
                             # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, db_dir)
-                            last_root_revision = root_revision_on_remote_svn_repo
+                            state.last_root_revision = root_revision_on_remote_svn_repo
                         transform_enqueued_actions_into_instructions(files_table, local_adds_chgs_deletes_queue, args.absolute_local_root_path)
                 except requests.packages.urllib3.exceptions.NewConnectionError as e:
                     write_error(db_dir, "NewConnectionError: " + repr(e))

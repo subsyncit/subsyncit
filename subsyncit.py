@@ -573,6 +573,7 @@ def make_directories_if_missing_in_db(config, dname, requests_session):
         dirs_made += 1
         print ("x TYPE: " + dname)
         dir = {'FN': dname,
+               'L': dname.count(os.sep),
                'T': 'D',
                'RS': None,
                'LS': None,
@@ -642,8 +643,6 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
                 "RS" : row['RS']
             }
 
-    my_trace(2,  " done populating initial unprocessed files" )
-
     get_file_count = 0
     get_dir_count = 0
     local_deletes = 0
@@ -669,7 +668,7 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
                 get_file_count += 1
             else:
                 get_dir_count += 1
-    my_trace(2,  " done iterating over files_on_svn_server")
+
 
     # files still in the unprocessed_files list are not up on Subversion
     for file_name, val in unprocessed_files.items():
@@ -714,7 +713,7 @@ def extract_name_type_rev(entry_xml_element):
 
 def svn_GETs(config, requests_session, excluded_filename_patterns):
 
-    my_trace(2,  " ---> perform_GETs_per_instructions - start")
+    my_trace(2,  " ---> svn_GETs - start")
     more_to_do = True
     batch = 0
 
@@ -753,7 +752,7 @@ def svn_GETs(config, requests_session, excluded_filename_patterns):
                      + " files, and " + str(num_rows - file_count)
                      + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec.", start)
 
-    my_trace(2,  " ---> perform_GETs_per_instructions - end")
+    my_trace(2,  " ---> svn_GETs - end")
 
 
 def instruct_to_reGET_parent_if_there(config, file_name):
@@ -805,7 +804,7 @@ def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, fil
 
 def local_deletes(config):
 
-    my_trace(2,  " ---> perform_local_deletes_per_instructions - start")
+    my_trace(2,  " ---> local_deletes - start")
 
     start = time.time()
 
@@ -827,7 +826,7 @@ def local_deletes(config):
     finally:
         section_end(deletes > 0,  "Performing local deletes took %s.", start)
 
-    my_trace(2,  " ---> perform_local_deletes_per_instructions - end")
+    my_trace(2,  " ---> local_deletes - end")
 
 def update_row_shas_size_and_timestamp(files_table, file_name, sha1, size_ts):
     if sha1 == None:
@@ -846,6 +845,7 @@ def upsert_row_in_table(files_table, file_name, rev, file_or_dir, instruction):
     # print "upsert1" + prt_files_table_for(files_table, file_name)
     if not files_table.contains(Query().FN == file_name):
         files_table.insert({'FN': file_name,
+                            'L': file_name.count(os.sep),
                             'T': file_or_dir,
                             'RS': None,
                             'LS': None,
@@ -926,7 +926,7 @@ def extract_path_from_baseline_rel_path(config, line):
 
 def svn_PUTs(config, requests_session):
 
-    my_trace(2,  " ---> perform_PUTs_per_instructions - start")
+    my_trace(2,  " ---> svn_PUTs - start")
 
     possible_clash_encountered = False
     more_to_do = True
@@ -944,8 +944,6 @@ def svn_PUTs(config, requests_session):
         try:
             rows = config.files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
-            if len(rows) > 0:
-                my_trace(2,  ": " + str(len(rows)) + " PUTs to perform on remote Subversion server...")
             for row in rows:
                 rel_file_name = row['FN']
                 try:
@@ -1010,7 +1008,7 @@ def svn_PUTs(config, requests_session):
                  + " PUT files, " + not_actually_changed_blurb
                  + speed + dirs_made_blurb + ".", start)
 
-    my_trace(2,  " ---> perform_PUTs_per_instructions - end")
+    my_trace(2,  " ---> svn_PUTs - end")
 
     return possible_clash_encountered
 
@@ -1032,7 +1030,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, file_name, lo
 
 def svn_DELETEs(config, requests_session):
 
-    my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - start")
+    my_trace(2,  " ---> svn_DELETEs - start")
 
     start = time.time()
 
@@ -1065,7 +1063,7 @@ def svn_DELETEs(config, requests_session):
           + str(directories_deleted) + " directories and " + str(files_deleted) + " files"
           + speed, start)
 
-    my_trace(2,  " ---> perform_DELETEs_on_remote_subversion_server_per_instructions - end")
+    my_trace(2,  " ---> svn_DELETEs - end")
 
 def svn_details(config, requests_session, file_name):
     ver = 0
@@ -1181,7 +1179,7 @@ def scantree(path):
 
 def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patterns):
 
-    my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - start")
+    my_trace(2,  " ---> scan_for_any_missed_adds_and_changes - start")
 
     start = time.time()
 
@@ -1217,13 +1215,13 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
           + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
 
-    my_trace(2,  " ---> enqueue_any_missed_adds_and_changes - end")
+    my_trace(2,  " ---> scan_for_any_missed_adds_and_changes - end")
 
     return to_add + to_change
 
 def scan_for_any_missed_deletes(config, state):
 
-    my_trace(2,  " ---> enqueue_any_missed_deletes - start")
+    my_trace(2,  " ---> scan_for_any_missed_deletes - start")
 
     start = time.time()
     to_delete = 0
@@ -1243,7 +1241,7 @@ def scan_for_any_missed_deletes(config, state):
     section_end(to_delete > 0,  ": " + str(to_delete)
              + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
 
-    my_trace(2,  " ---> enqueue_any_missed_deletes - end")
+    my_trace(2,  " ---> scan_for_any_missed_deletes - end")
 
     return to_delete
 

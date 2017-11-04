@@ -886,6 +886,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     def get_status_dict(self):
         return json.loads(self.file_contents(self.db_dir_a + "status.json"))
 
+
     def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self):
 
         bambam = -1

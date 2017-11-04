@@ -374,6 +374,17 @@ class Config(object):
         self.svn_repo_parent_path = None
 
 
+class State(object):
+
+    def __init__(self):
+        self.online = False
+
+    def __str__(self):
+        return "online: " + str(self.online)
+
+    def toJSON(self):
+        return '{"online": ' + str(self.online).lower() + '}'
+
 class LastStatus(object):
 
     def __init__(self):
@@ -1371,17 +1382,15 @@ def main(argv):
         file_system_watcher.daemon = True
         file_system_watcher.start()
 
-    status = {
-        "online": False
-    }
-
     last_status = LastStatus()
 
     iteration = 0
     last_scanned = 0
 
     config = Config()
-    
+    state = State()
+    state.online = False
+
     config.svn_url = args.svn_url
 
     try:
@@ -1399,7 +1408,7 @@ def main(argv):
             if root_revision_on_remote_svn_repo > 0:
 
                 try:
-                    status['online'] = True
+                    state.online = True
                     config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
 
                     if root_revision_on_remote_svn_repo != None:
@@ -1439,14 +1448,14 @@ def main(argv):
                 except requests.exceptions.ConnectionError as e:
                     write_error(db_dir, "ConnectionError: " + repr(e))
             else:
-                    status['online'] = False
+                    state.online = False
 
-            status_str = str(status)
+            status_str = str(state)
             if status_str != last_status.string:
                 last_status.string = status_str
                 status_file = db_dir + "status.json"
                 with open(status_file, "w") as text_file:
-                    text_file.write(json.dumps(status))
+                    text_file.write(state.toJSON())
 
             if not requests_session.anything_happened():
                 time.sleep(args.sleep_secs)

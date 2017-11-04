@@ -617,11 +617,11 @@ def PUT_file(config, requests_session, abs_local_file_path, alleged_remote_sha1)
     return dirs_made
 
 
-def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, files_on_svn_server, prefix):
+def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, files_on_svn_server, directory):
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
-    prefix_dir_count = prefix.count(os.sep)
+    prefix_dir_count = directory.count(os.sep)
 
     start = time.time()
     unprocessed_files = {}
@@ -630,7 +630,7 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
     for row in rows:
         file_name = row['FN']
         if not excluded_filename_patterns.should_be_excluded(file_name)\
-                and file_name.startswith(prefix):  # perhaps would faster if inside the where clause
+                and file_name.startswith(directory):  # perhaps would faster if inside the where clause
 
             if file_name.count(os.sep) - prefix_dir_count > 0:
                 continue
@@ -672,7 +672,7 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
         update_instruction_in_table(config.files_table, DELETE_LOCALLY, file_name)
 
     section_end(get_count > 0 or local_deletes > 0,  "Instructions created for " + str(get_count) + " GETs and " + str(local_deletes)
-          + " local deletes (comparison of all the files on the Subversion server to files in the sync dir) took %s.", start)
+          + " local deletes (comparison of all the files within " + directory + ") took %s.", start)
 
     my_trace(2,  " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
 

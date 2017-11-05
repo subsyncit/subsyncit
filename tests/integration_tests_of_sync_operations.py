@@ -242,12 +242,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             files_not_found_in_subversion = copy.deepcopy(files)
 
-            while len(files) > 1 and elapsed < 90:
+            while len(files_not_found_in_subversion) > 1 and elapsed < 90:
                 files2 = copy.deepcopy(files_not_found_in_subversion)
                 for f in files2:
                     if requests.get(self.svn_url + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
                         files_not_found_in_subversion.remove(f)
                 elapsed = time.time() - start
+                print ("loopin " + str(elapsed) + " ct = " + str(len(files_not_found_in_subversion)))
 
             self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
 

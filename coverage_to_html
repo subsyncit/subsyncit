@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
 import glob
-
 import os
-
 import sh
+
+def change_to_parent_resources(dir):
+    sh.sed("-i", '', 's/src="/src="..\//', dir + os.sep + "subsyncit_py.html")
+    sh.sed("-i", '', 's/style.css/..\/style.css/', dir + os.sep + "subsyncit_py.html")
+
+
+sh.rm("-rf", "docs/coverage_reports" + os.sep)
+all_coverages_args = ["combine"]
 
 for test in glob.glob("integrationTests/*"):
     index_page = '<html><body>\n'
@@ -12,21 +18,30 @@ for test in glob.glob("integrationTests/*"):
     with open(test + os.sep + ".testname", 'r') as f:
         testname = "".join(f.readlines())
     one = test + os.sep + "one" + os.sep + ".coverage"
-    print(one)
     two = test + os.sep + "two" + os.sep + ".coverage"
-    print("  " + two)
     if os.path.exists(one) and os.path.exists(two):
+        sh.cp(one, one + ".copy")
+        sh.cp(two, two + ".copy")
         sh.coverage("combine", one, two)
+        sh.cp(two + ".copy", two)
+        sh.cp(one + ".copy", one)
+        all_coverages_args.append(one)
+        all_coverages_args.append(two)
     elif os.path.exists(one):
+        sh.cp(one, one + ".copy")
         sh.coverage("combine", one)
+        sh.cp(one + ".copy", one)
+        all_coverages_args.append(one)
     else:
         print ("oops")
         continue
     sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
     sh.git("add", "docs/coverage_reports" + os.sep + testname)
-    sh.sed("-i", '', 's/src="/src="..\//', "docs/coverage_reports" + os.sep + testname + os.sep + "subsyncit_py.html")
-    sh.sed("-i", '',  's/style.css/..\/style.css/', "docs/coverage_reports" + os.sep + testname + os.sep + "subsyncit_py.html")
+    change_to_parent_resources("docs/coverage_reports" + os.sep + testname)
     index_page += '<a href="' + testname + '">' + testname + '</a><br>\n'
-index_page += '</body></html>'
+sh.coverage(all_coverages_args)
+sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + "all", "--include", "subsyncit.py")
+change_to_parent_resources("docs/coverage_reports" + os.sep + "all")
+index_page += '</body></html><br>\n<a href="all">all</a>'
 with open("docs/coverage_reports" + os.sep + "index.html", "w") as text_file:
     text_file.write(index_page)

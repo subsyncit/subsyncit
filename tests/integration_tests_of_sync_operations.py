@@ -248,7 +248,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                     if requests.get(self.svn_url + f, auth=(self.user, self.passwd), verify=False).status_code == 200:
                         files_not_found_in_subversion.remove(f)
                 elapsed = time.time() - start
-                print ("loopin " + str(elapsed) + " ct = " + str(len(files_not_found_in_subversion)))
 
             self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
 
@@ -259,6 +258,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 files_not_found_in_subversion.remove("c?c")
 
             self.assertEquals(len(files_not_found_in_subversion), 0, "Some not found in Subversion: " + str(files_not_found_in_subversion))
+
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "CONTROL")
 
             # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
             self.maxDiff = None

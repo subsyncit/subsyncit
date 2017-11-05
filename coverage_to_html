@@ -13,10 +13,11 @@ def change_to_parent_resources(dir):
 
 for f in glob.glob("docs/coverage_reports" + os.sep + "test*"):
     shutil.rmtree(f)
+
 all_coverages_args = ["combine"]
+index_page = '<html><body>\n'
 
 for test in glob.glob("integrationTests/*"):
-    index_page = '<html><body>\n'
     testname = ""
     with open(test + os.sep + ".testname", 'r') as f:
         testname = "".join(f.readlines())
@@ -54,4 +55,4 @@ change_to_parent_resources("docs/coverage_reports" + os.sep + "all")
 index_page += '</body></html><br>\n<a href="all">all</a>'
 with open("docs/coverage_reports" + os.sep + "index.html", "w") as text_file:
     text_file.write(index_page)
-sh.git("docs/coverage_reports")
+sh.git("add", "docs/coverage_reports")

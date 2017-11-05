@@ -7,7 +7,9 @@ import shutil
 import sh
 
 def change_to_parent_resources_and_remove_timesstamps(dir, srcfile):
-    sh.sed("-i", '', 's/src="/src="..\//', dir + os.sep + srcfile)
+    sh.sed("-i", '', 's/src="k/src="..\/k/', dir + os.sep + srcfile)
+    sh.sed("-i", '', 's/src="j/src="..\/j/', dir + os.sep + srcfile)
+    sh.sed("-i", '', 's/src="c/src="..\/c/', dir + os.sep + srcfile)
     sh.sed("-i", '', 's/style.css/..\/style.css/', dir + os.sep + srcfile)
     sh.sed("-i", '', '/created at 20/d', dir + os.sep + srcfile)
 

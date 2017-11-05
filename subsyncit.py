@@ -123,14 +123,9 @@ class MyRequestsTracer():
 
     def rq_debug(self, msg):
         try:
-            st = traceback.extract_stack()
-            methods = []
-            for ste in st:
-                methods.append(ste[2])
-            msg += ", stack: " + ":".join(methods[2:-2])
+            msg += "; stack: " + stack_trace()
         finally:
             debug(msg)
-
 
     def mkcol(self, url):
         start = time.time()
@@ -295,7 +290,14 @@ class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = False
+        self.always_print = True
+
+    def db_debug(self, msg):
+        try:
+            msg += "; stack: " + stack_trace()
+        finally:
+            debug(msg)
+
 
     def search(self, arg0):
         start = time.time()
@@ -307,7 +309,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.search: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+                self.db_debug("TinyDB.search: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
         start = time.time()
@@ -320,7 +322,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.get: [" + result + "] " + str(arg0) + " " + english_duration(durn) + " " + str(get))
+                self.db_debug("TinyDB.get: [" + result + "] " + str(arg0) + " " + english_duration(durn) + " " + str(get))
 
     def remove(self, arg0):
         start = time.time()
@@ -332,7 +334,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDBremove: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+                self.db_debug("TinyDB.remove: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
         start = time.time()
@@ -344,7 +346,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.update: [" + result + "] " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
+                self.db_debug("TinyDB.update: [" + result + "] " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
         start = time.time()
@@ -356,7 +358,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.insert: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+                self.db_debug("TinyDB.insert: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
         start = time.time()
@@ -368,7 +370,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.contains: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+                self.db_debug("TinyDB.contains: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def all(self):
         start = time.time()
@@ -380,7 +382,7 @@ class MyTinyDBTrace():
         finally:
             durn = time.time() - start
             if durn > .01 or self.always_print:
-                debug("TinyDB.all: [" + result + "] " + english_duration(durn))
+                self.db_debug("TinyDB.all: [" + result + "] " + english_duration(durn))
 
 
 class UnexpectedStatusCode(Exception):
@@ -537,6 +539,17 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
                 self.local_adds_chgs_deletes_queue.add((file_name, "change"))
 
 
+def stack_trace():
+    methods = []
+    for ste in reversed(traceback.extract_stack()):
+        method_name = ste[2]
+        if method_name == "<module>":
+            break
+        if method_name != "stack_trace" and "_debug" not in method_name:
+            methods.insert(0, method_name)
+    return ":".join(methods)
+
+
 def get_suffix(file_name):
     file_name, extension = splitext(file_name)
     return extension
@@ -622,7 +635,6 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
-
     start = time.time()
     unprocessed_files = {}
 
@@ -632,11 +644,15 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
     for row in rows:
         file_name = row['FN']
         if not excluded_filename_patterns.should_be_excluded(file_name):
+            print("added to unprocessed " + file_name)
             unprocessed_files[file_name] = {
                 "I" : row["I"],
                 "T" : row["T"],
                 "RS" : row['RS']
             }
+
+    debug(" ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start " + str(len(unprocessed_files)))
+
 
     get_file_count = 0
     get_dir_count = 0
@@ -669,9 +685,9 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
         local_deletes += 1
         update_instruction_in_table(config.files_table, DELETE_LOCALLY, file_name)
 
-    fd = str(get_file_count) + " file GETs" if get_file_count > 0 else ""
-    dc = str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
-    ld = str(local_deletes) + " local deletes" if local_deletes > 0 else ""
+    fd = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+    dc = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+    ld = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
 
     section_end(get_file_count > 0 or get_dir_count > 0 or local_deletes > 0,  "Instructions created for"
                 + fd + dc + ld + " (comparison of the dirs/files within " + directory + ") took %s.", start)
@@ -818,7 +834,7 @@ def local_deletes(config):
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
     finally:
-        section_end(deletes > 0,  "Performing local deletes took %s.", start)
+        section_end(deletes > 0,  "Performing " + str(deletes) + " local deletes took %s.", start)
 
     my_trace(2,  " ---> local_deletes - end")
 
@@ -1452,7 +1468,7 @@ def main(argv):
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
 
-    transform_enqueued_actions_into_instructions(config.files_table, local_adds_chgs_deletes_queue)
+    transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
 
     try:
         file_system_watcher.stop()

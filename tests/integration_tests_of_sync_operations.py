@@ -308,17 +308,25 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_deleted_file_syncs_down(self):
 
-        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello",
-                                    verify=False))
+        test_start = time.time()
+
+        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
         self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
         try:
             self.wait_for_file_to_appear(self.test_sync_dir_one + "output.txt")
 
-            requests.delete(self.svn_url + "output.txt", auth=(self.user, self.passwd), verify=False)
+            self.expect204(requests.delete(self.svn_url + "output.txt", auth=(self.user, self.passwd), verify=False))
+
             self.wait_for_file_to_disappear(self.test_sync_dir_one + "output.txt")
+
+            # self.fail("xxx")
         finally:
             self.end_process_one()
+
+            rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+            if len(rows) > 0:
+                print("row 0 " + str(rows[0]))
 
 
     @timedtest

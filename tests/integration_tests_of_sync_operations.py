@@ -40,6 +40,7 @@ from tinydb import TinyDB
 class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     test_num = 0
+    test_name = ""
     test_sync_dir_a = ""
     test_sync_dir_b = ""
     process_a = None
@@ -60,12 +61,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @decorator
     def timedtest(f, *args, **kwargs):
 
+        IntegrationTestsOfSyncOperations.test_name = getattr(f, "__name__", "<unnamed>")
         t1 = time.time()
         out = f(*args, **kwargs)
         t2 = time.time()
         dt = str((t2 - t1) * 1.00)
         dtout = dt[:(dt.find(".") + 4)]
-        print('\nTest {0} finished in {1}s'.format(getattr(f, "__name__", "<unnamed>"), dtout))
+        print('\nTest {0} finished in {1}s'.format(IntegrationTestsOfSyncOperations.test_name, dtout))
         print("==================================================================================================================================")
 
 
@@ -155,6 +157,10 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             print(">>>>> B OUTPUT and ERR >>>>>")
             print(b)
 
+        with open(self.test_sync_dir_a + os.sep + ".testname", "w", encoding="utf-8") as text_file:
+            text_file.write(IntegrationTestsOfSyncOperations.test_name)
+        with open(self.test_sync_dir_b + os.sep + ".testname", "w", encoding="utf-8") as text_file:
+            text_file.write(IntegrationTestsOfSyncOperations.test_name)
 
     @timedtest
     def test_a_single_file_syncs(self):
@@ -864,7 +870,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         #     """))
 
 
-        # self.fail("dddd")
+        self.fail("dddd")
 
     # ======================================================================================================
 
@@ -1080,12 +1086,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         if passwd is None:
             passwd = self.passwd
         print("Subsyncit start. URL: " + svn_repo + ", sync dir: " + dir)
-        args = ['subsyncit.py', svn_repo, dir, self.user, '--no-verify-ssl-cert', "--sleep-secs-between-polling", "1", '--passwd', passwd]
+        cwd = os.getcwd()
+        args = ["run", "--branch", cwd + os.sep + 'subsyncit.py', svn_repo, dir, self.user, '--no-verify-ssl-cert', "--sleep-secs-between-polling", "1", '--passwd', passwd]
         if extra_opt:
             args.append(extra_opt)
         if extra_opt2:
             args.append(extra_opt2)
-        python = sh.python3(args, _out=process_output, _err_to_out=True, _bg=True)
+        python = sh.coverage(args, _out=process_output, _err_to_out=True, _bg=True, _cwd=dir)
         return python
 
 

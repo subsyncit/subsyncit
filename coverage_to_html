@@ -36,6 +36,12 @@ for test in glob.glob("integrationTests/*"):
         print ("oops")
         continue
     sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
+    for f in glob.glob("docs/coverage_reports" + os.sep + testname + os.sep + "*.css"):
+        os.remove(f)
+    for f in glob.glob("docs/coverage_reports" + os.sep + testname + os.sep + "*.js"):
+        os.remove(f)
+    for f in glob.glob("docs/coverage_reports" + os.sep + testname + os.sep + "*.png"):
+        os.remove(f)
     sh.git("add", "docs/coverage_reports" + os.sep + testname)
     change_to_parent_resources("docs/coverage_reports" + os.sep + testname)
     index_page += '<a href="' + testname + '">' + testname + '</a><br>\n'

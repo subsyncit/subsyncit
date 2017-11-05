@@ -7,6 +7,7 @@ import os
 import sh
 
 for test in glob.glob("integrationTests/*"):
+    index_page = '<html><body>\n'
     testname = ""
     with open(test + os.sep + ".testname", 'r') as f:
         testname = "".join(f.readlines())
@@ -21,5 +22,9 @@ for test in glob.glob("integrationTests/*"):
         continue
     sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
     sh.git("add", "docs/coverage_reports" + os.sep + testname)
-
-
+    sh.sed("-i", "''", '\'s/src="/src="..\//\'', "docs/coverage_reports" + os.sep + testname + os.sep, "subsyncit.py.html")
+    sh.sed("-i", "''",  "'s/style.css/..\/style.css/'", "docs/coverage_reports" + os.sep + testname + os.sep, "subsyncit.py.html")
+    index_page + '<a href="' + testname + '">' + testname + '</a><br>\n'
+index_page += '</body></html>'
+with open("docs/coverage_reports" + os.sep + "index.html", "w") as text_file:
+    text_file.write(index_page)

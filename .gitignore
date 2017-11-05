@@ -12,3 +12,4 @@ runit.sh
 .DS_Store
 testBigRandomFile*
 .cache/
+.coverage

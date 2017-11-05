@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+import glob
+
+import os
+
+import sh
+
+for test in glob.glob("integrationTests/*"):
+    testname = ""
+    with open(test + os.sep + ".testname", 'r') as f:
+        testname = "".join(f.readlines())
+    print(testname)
+    one = test + os.sep + "one" + os.sep + ".coverage"
+    two = test + os.sep + "two" + os.sep + ".coverage"
+    if os.path.exists(one) and os.path.exists(two):
+        sh.coverage("combine", one, two)
+    elif os.path.exists(one):
+        sh.coverage("combine", one)
+    else:
+        continue
+    sh.coverage("html", "-d", "coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
+    sh.git("add", "coverage_reports" + os.sep + testname)
+
+

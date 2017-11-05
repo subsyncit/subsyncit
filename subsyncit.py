@@ -622,21 +622,16 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
 
     my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
 
-    prefix_dir_count = directory.count(os.sep)
 
     start = time.time()
     unprocessed_files = {}
 
-    rows = config.files_table.search(Query().I == None) # TODO - should mask out Instructed ones??
+    Row = Query()
+
+    rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
     for row in rows:
         file_name = row['FN']
-        if not excluded_filename_patterns.should_be_excluded(file_name)\
-                and file_name.startswith(directory):  # perhaps would faster if inside the where clause
-
-            if file_name.count(os.sep) - prefix_dir_count > 0:
-                continue
-                     # ^ this directory not sub-directories
-
+        if not excluded_filename_patterns.should_be_excluded(file_name):
             unprocessed_files[file_name] = {
                 "I" : row["I"],
                 "T" : row["T"],
@@ -668,7 +663,6 @@ def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename
                 get_file_count += 1
             else:
                 get_dir_count += 1
-
 
     # files still in the unprocessed_files list are not up on Subversion
     for file_name, val in unprocessed_files.items():

@@ -34,6 +34,7 @@ import requests
 import sh
 from decorator import decorator
 from docker.errors import NotFound
+from os.path import dirname
 from tinydb import TinyDB
 
 
@@ -73,7 +74,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        sh.rm("-rf", str(sh.pwd()).strip('\n') + "/integrationTests/")
+        sh.rm("-rf", str(sh.pwd()).strip('\n') + os.sep + "/integrationTests/")
 
         cls.client = docker.from_env()
 
@@ -117,10 +118,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         IntegrationTestsOfSyncOperations.test_num += 1
         testNum = str(IntegrationTestsOfSyncOperations.test_num)
 
-        self.rel_dir_a = "integrationTests/test_" + testNum + "a/"
-        self.test_sync_dir_a = str(sh.pwd()).strip('\n') + self.rel_dir_a
-        self.rel_dir_b = "integrationTests/test_" + testNum + "b/"
-        self.test_sync_dir_b = str(sh.pwd()).strip('\n') + self.rel_dir_b
+        self.rel_dir_a = "integrationTests/test_" + testNum + "/a/"
+        pwd = str(sh.pwd()).strip('\n')
+        self.test_sync_dir_a = pwd + os.sep + self.rel_dir_a
+        self.rel_dir_b = "integrationTests/test_" + testNum + "/b/"
+        self.test_sync_dir_b = pwd + os.sep + self.rel_dir_b
 
         self.db_dir_a = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_a.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
         self.db_dir_b = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_b.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
@@ -157,9 +159,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             print(">>>>> B OUTPUT and ERR >>>>>")
             print(b)
 
-        with open(self.test_sync_dir_a + os.sep + ".testname", "w", encoding="utf-8") as text_file:
-            text_file.write(IntegrationTestsOfSyncOperations.test_name)
-        with open(self.test_sync_dir_b + os.sep + ".testname", "w", encoding="utf-8") as text_file:
+        with open(dirname(self.test_sync_dir_a[:-1]) + os.sep + ".testname", "w", encoding="utf-8") as text_file:
             text_file.write(IntegrationTestsOfSyncOperations.test_name)
 
     @timedtest

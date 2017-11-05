@@ -19,7 +19,7 @@ for test in glob.glob("integrationTests/*"):
         sh.coverage("combine", one)
     else:
         continue
-    sh.coverage("html", "-d", "coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
-    sh.git("add", "coverage_reports" + os.sep + testname)
+    sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + testname, "--include", "subsyncit.py")
+    sh.git("add", "docs/coverage_reports" + os.sep + testname)
 
 

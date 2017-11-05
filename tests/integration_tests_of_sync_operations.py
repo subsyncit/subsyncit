@@ -42,10 +42,10 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     test_num = 0
     test_name = ""
-    test_sync_dir_a = ""
-    test_sync_dir_b = ""
-    process_a = None
-    process_b = None
+    test_sync_dir_one = ""
+    test_sync_dir_two = ""
+    process_one = None
+    process_two = None
     container = None
     kill_container_at_end = False
 
@@ -107,8 +107,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.maxDiff = None
 
         from io import StringIO
-        self.process_output_a = StringIO()
-        self.process_output_b = StringIO()
+        self.process_output_one = StringIO()
+        self.process_output_two = StringIO()
 
         if os.name != 'nt':
             self.home_dir = os.path.expanduser('~' + (os.getenv("SUDO_USER") or os.getenv("USER")))
@@ -118,19 +118,19 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         IntegrationTestsOfSyncOperations.test_num += 1
         testNum = str(IntegrationTestsOfSyncOperations.test_num)
 
-        self.rel_dir_a = "integrationTests/test_" + testNum + "/a/"
+        self.rel_dir_one = "integrationTests/test_" + testNum + "/one/"
         pwd = str(sh.pwd()).strip('\n')
-        self.test_sync_dir_a = pwd + os.sep + self.rel_dir_a
-        self.rel_dir_b = "integrationTests/test_" + testNum + "/b/"
-        self.test_sync_dir_b = pwd + os.sep + self.rel_dir_b
+        self.test_sync_dir_one = pwd + os.sep + self.rel_dir_one
+        self.rel_dir_two = "integrationTests/test_" + testNum + "/two/"
+        self.test_sync_dir_two = pwd + os.sep + self.rel_dir_two
 
-        self.db_dir_a = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_a.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
-        self.db_dir_b = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_b.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
+        self.db_dir_one = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_one.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
+        self.db_dir_two = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_two.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
 
-        self.reset_test_dir(self.test_sync_dir_a)
-        self.reset_test_dir(self.db_dir_a)
-        self.reset_test_dir(self.test_sync_dir_b)
-        self.reset_test_dir(self.db_dir_b)
+        self.reset_test_dir(self.test_sync_dir_one)
+        self.reset_test_dir(self.db_dir_one)
+        self.reset_test_dir(self.test_sync_dir_two)
+        self.reset_test_dir(self.db_dir_two)
 
         self.svn_url = self.svn_repo + "integrationTests/test_" + testNum + "/"
         self.expect201(requests.request('MKCOL', self.svn_url, auth=(self.user, self.passwd), verify=False))
@@ -138,8 +138,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def tearDown(self):
 
-        self.end(self.process_a, self.test_sync_dir_a)
-        self.end(self.process_b, self.test_sync_dir_b)
+        self.end(self.process_one, self.test_sync_dir_one)
+        self.end(self.process_two, self.test_sync_dir_two)
 
         def list2reason(exc_list):
             if exc_list and exc_list[-1][0] is self:
@@ -150,16 +150,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self._feedErrorsToResult(result, self._outcome.errors)
         errs = str(list2reason(result.errors))
         failed = "File \"subsyncit.py\", line" in errs or "AssertionError:" in str(list2reason(result.failures))
-        a = self.process_output_a.getvalue()
+        a = self.process_output_one.getvalue()
         if failed and len(a) > 0:
             print(">>>>> A OUTPUT and ERR >>>>>")
             print(a)
-        b = self.process_output_b.getvalue()
+        b = self.process_output_two.getvalue()
         if failed and len(b) > 0:
             print(">>>>> B OUTPUT and ERR >>>>>")
             print(b)
 
-        with open(dirname(self.test_sync_dir_a[:-1]) + os.sep + ".testname", "w", encoding="utf-8") as text_file:
+        with open(dirname(self.test_sync_dir_one[:-1]) + os.sep + ".testname", "w", encoding="utf-8") as text_file:
             text_file.write(IntegrationTestsOfSyncOperations.test_name)
 
     @timedtest
@@ -167,48 +167,48 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         test_start = time.time()
 
-        self.start_a_and_b_subsyncits()
+        self.start_one_and_two_subsyncits()
         try:
-            test_file_a = self.test_sync_dir_a + "testfile.txt"
+            test_file_a = self.test_sync_dir_one + "testfile.txt"
             with open(test_file_a, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
-            test_file_b = self.test_sync_dir_b + "testfile.txt"
-            self.wait_for_file_to_appear(test_file_b)
-            self.wait_for_file_contents_to_contain(test_file_b, "Hello")
+            test_file_two = self.test_sync_dir_two + "testfile.txt"
+            self.wait_for_file_to_appear(test_file_two)
+            self.wait_for_file_contents_to_contain(test_file_two, "Hello")
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
         self.should_start_with(rows, 0, "01, testfile.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0")
 
 
     @timedtest
     def test_a_changed_file_syncs_back(self):
 
-        self.start_a_and_b_subsyncits()
+        self.start_one_and_two_subsyncits()
 
         test_start = time.time()
 
         time.sleep(2)
 
         try:
-            test_file_in_a = self.test_sync_dir_a + "testfile.txt"
+            test_file_in_a = self.test_sync_dir_one + "testfile.txt"
             with open(test_file_in_a, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello") # f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0
 
-            test_file_in_b = self.test_sync_dir_b + "testfile.txt"
-            self.wait_for_file_to_appear(test_file_in_b)
+            test_file_in_two = self.test_sync_dir_two + "testfile.txt"
+            self.wait_for_file_to_appear(test_file_in_two)
 
             time.sleep(1)
-            with open(test_file_in_b, "w", encoding="utf-8") as text_file:
+            with open(test_file_in_two, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello to you too") # 3f19e1ea9c19f0c6967723b453a423340cbd6e36
 
             self.wait_for_file_contents_to_contain(test_file_in_a, "Hello to you too")
 
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
         self.should_start_with(rows, 0, "01, testfile.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36")
 
 
@@ -223,13 +223,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 #        test_start = time.time()
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
             files = ["a&a", "b{b", "c?c", "d$d", "e;e", "f=f", "g+g", "h,h",
                      "i(i", "j)j", "k[k", "l]l", "m:m", "n\'n", "o\"o", "p`p", "q*q", "r~r"]
             for f in files:
-                with open(self.test_sync_dir_a + f, "w", encoding="utf-8") as text_file:
+                with open(self.test_sync_dir_one + f, "w", encoding="utf-8") as text_file:
                     text_file.write("Hello")
 
             self.expect201(
@@ -262,11 +262,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             # As Subsncit pulled down files it didn't already have, the only one to add was the `CONTROL` file.
             self.maxDiff = None
             self.assertEquals(str(sorted(
-                os.listdir(self.test_sync_dir_a))),
+                os.listdir(self.test_sync_dir_one))),
                 "['CONTROL', 'a&a', 'b{b', 'c?c', 'd$d', 'e;e', 'f=f', 'g+g', 'h,h', 'i(i', 'j)j', 'k[k', 'l]l', 'm:m', \"n\'n\", 'o\"o', 'p`p', 'q*q', 'r~r']")
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
         # files_table = self.get_db_rows(test_start, self.test_sync_dir_a)
         #
@@ -282,13 +282,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         # or on the way back over HTTP into the file system. No matter - the most important representation of file name
         # is in the file system, and we only require consistent GET/PUT from/to that.
 
-        dir = self.test_sync_dir_a
+        dir = self.test_sync_dir_one
 
         os.mkdir(dir + "aaa")
         with open(dir + "aaa/test.txt", "w") as text_file:
             text_file.write("testttt")
 
-        self.process_a = self.start_subsyncit(self.svn_url, dir, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, dir, self.process_output_one)
 
         try:
             start = time.time()
@@ -300,7 +300,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 time.sleep(1.5)
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
@@ -309,14 +309,14 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello",
                                     verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
         try:
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "output.txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "output.txt")
 
             requests.delete(self.svn_url + "output.txt", auth=(self.user, self.passwd), verify=False)
-            self.wait_for_file_to_disappear(self.test_sync_dir_a + "output.txt")
+            self.wait_for_file_to_disappear(self.test_sync_dir_one + "output.txt")
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
@@ -325,31 +325,31 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="Hello",
                                     verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "output.txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "output.txt")
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
     def test_a_deleted_file_syncs_back(self):
 
-        self.start_a_and_b_subsyncits()
+        self.start_one_and_two_subsyncits()
         try:
-            a_path = self.test_sync_dir_a + "testfile"
+            a_path = self.test_sync_dir_one + "testfile"
             with open(a_path, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
-            b_path = self.test_sync_dir_b + "testfile"
+            b_path = self.test_sync_dir_two + "testfile"
             self.wait_for_file_to_appear(b_path)
             time.sleep(.1)
-            self.journal_to_a_and_b("-- orig sync'd from a to b --")
+            self.journal_to_one_and_two("-- orig sync'd from a to b --")
             os.remove(b_path)
             self.wait_for_file_to_disappear(a_path)
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
 
     @timedtest
@@ -357,22 +357,22 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
 
-        self.start_subsyncit_a()
-        self.start_subsyncit_b()
+        self.start_subsyncit_one()
+        self.start_subsyncit_two()
 
         try:
-            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
-            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
-            self.wait_for_file_to_appear(file_in_subsyncit_a)
-            self.wait_for_file_to_appear(file_in_subsyncit_b)
-            self.signal_stop_of_subsyncit(self.test_sync_dir_b)
-            self.process_b.wait()
-            with open(file_in_subsyncit_b, "w") as text_file:
+            file_in_subsyncit_one = self.test_sync_dir_one + "output.txt"
+            file_in_subsyncit_two = self.test_sync_dir_two + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_one)
+            self.wait_for_file_to_appear(file_in_subsyncit_two)
+            self.signal_stop_of_subsyncit(self.test_sync_dir_two)
+            self.process_two.wait()
+            with open(file_in_subsyncit_two, "w") as text_file:
                 text_file.write("Overrite locally in client 2")
-            self.start_subsyncit_b()
-            self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+            self.start_subsyncit_two()
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Overrite locally in client 2")
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
 
     @timedtest
@@ -380,22 +380,22 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
 
-        self.start_subsyncit_a(extra_opt="--do-not-listen-for-file-system-events")
-        self.start_subsyncit_b(extra_opt="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_one(extra_opt="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_two(extra_opt="--do-not-listen-for-file-system-events")
 
         try:
-            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
-            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
-            self.wait_for_file_to_appear(file_in_subsyncit_a)
-            self.wait_for_file_to_appear(file_in_subsyncit_b)
-            self.signal_stop_of_subsyncit(self.test_sync_dir_b)
-            self.process_b.wait()
-            with open(file_in_subsyncit_b, "w") as text_file:
+            file_in_subsyncit_one = self.test_sync_dir_one + "output.txt"
+            file_in_subsyncit_two = self.test_sync_dir_two + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_one)
+            self.wait_for_file_to_appear(file_in_subsyncit_two)
+            self.signal_stop_of_subsyncit(self.test_sync_dir_two)
+            self.process_two.wait()
+            with open(file_in_subsyncit_two, "w") as text_file:
                 text_file.write("Overrite locally in client 2")
-            self.start_subsyncit_b()
-            self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+            self.start_subsyncit_two()
+            self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Overrite locally in client 2")
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
 
     @timedtest
@@ -403,27 +403,27 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))
 
-        self.start_subsyncit_a(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
-        self.start_subsyncit_b(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_one(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+        self.start_subsyncit_two(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
 
         try:
-            file_in_subsyncit_a = self.test_sync_dir_a + "output.txt"
-            file_in_subsyncit_b = self.test_sync_dir_b + "output.txt"
-            self.wait_for_file_to_appear(file_in_subsyncit_a)
-            self.wait_for_file_to_appear(file_in_subsyncit_b)
-            self.signal_stop_of_subsyncit(self.test_sync_dir_b)
-            self.process_b.wait()
-            with open(file_in_subsyncit_b, "w") as text_file:
+            file_in_subsyncit_one = self.test_sync_dir_one + "output.txt"
+            file_in_subsyncit_two = self.test_sync_dir_two + "output.txt"
+            self.wait_for_file_to_appear(file_in_subsyncit_one)
+            self.wait_for_file_to_appear(file_in_subsyncit_two)
+            self.signal_stop_of_subsyncit(self.test_sync_dir_two)
+            self.process_two.wait()
+            with open(file_in_subsyncit_two, "w") as text_file:
                 text_file.write("Overrite locally in client 2")
-            self.start_subsyncit_b(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
+            self.start_subsyncit_two(extra_opt="--do-not-scan-file-system-periodically", extra_opt2="--do-not-listen-for-file-system-events")
             ae = None
             try:
-                self.wait_for_file_contents_to_contain(file_in_subsyncit_a, "Overrite locally in client 2")
+                self.wait_for_file_contents_to_contain(file_in_subsyncit_one, "Overrite locally in client 2")
             except AssertionError as e:
                 ae = e
             self.assertIsNotNone(ae)
         finally:
-            self.end_process_a_and_b()
+            self.end_process_one_and_two()
 
 
     @timedtest
@@ -435,13 +435,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                                         verify=False))
         self.expect201(requests.put(self.svn_url + "fred/output.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
-            testfile_in_a = self.test_sync_dir_a + "fred/output.txt"
+            testfile_in_a = self.test_sync_dir_one + "fred/output.txt"
             self.wait_for_file_to_appear(testfile_in_a)
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
@@ -454,19 +454,19 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.expect201(requests.put(self.svn_url + "output.zzz", auth=(self.user, self.passwd), data="Hello", verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
 
-            test_file_in_a = self.test_sync_dir_a + "output.zzz"
+            test_file_in_a = self.test_sync_dir_one + "output.zzz"
             self.wait_for_file_to_appear(test_file_in_a)
 
-            test_file_in_a = self.test_sync_dir_a + "output.txt"
+            test_file_in_a = self.test_sync_dir_one + "output.txt"
             time.sleep(2) # the two files should arrive pretty much at the same time, but why not wait 2 secs, heh?
             if os.path.exists(test_file_in_a):
                 self.fail("File " + test_file_in_a + " should not have appeared but did.")
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
@@ -478,13 +478,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                                         verify=False))
         self.expect201(requests.put(self.svn_url + "f r e d/o u t & p u t.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
-            testfile_in_a = self.test_sync_dir_a + "f r e d/o u t & p u t.txt"
+            testfile_in_a = self.test_sync_dir_one + "f r e d/o u t & p u t.txt"
             self.wait_for_file_to_appear(testfile_in_a)
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
         # with open(self.testSyncDir1 + "paul was here.txt", "w") as text_file:
         #     text_file.write("Hello to you too")
@@ -497,72 +497,72 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('MKCOL', self.svn_url + "aaa/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.put(self.svn_url + "aaa/another.txt", auth=(self.user, self.passwd), data="Hello", verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
         try:
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "something.txt", "Hello")
-            self.signal_stop_of_subsyncit(self.test_sync_dir_a)
-            self.process_a.wait()
+            self.wait_for_file_contents_to_contain(self.test_sync_dir_one + "something.txt", "Hello")
+            self.signal_stop_of_subsyncit(self.test_sync_dir_one)
+            self.process_one.wait()
 
             self.expect204(requests.put(self.svn_url + "something.txt", auth=(self.user, self.passwd), data="Hello changed on server", verify=False))
 
-            with open(self.test_sync_dir_a + "something.txt", "w") as text_file:
+            with open(self.test_sync_dir_one + "something.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
-            with open(self.test_sync_dir_a + "aaa/something_else.txt", "w") as text_file:
+            with open(self.test_sync_dir_one + "aaa/something_else.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
-            os.mkdir(self.test_sync_dir_a + "aaa/bbb")
-            with open(self.test_sync_dir_a + "aaa/bbb/something_else.txt", "w") as text_file:
+            os.mkdir(self.test_sync_dir_one + "aaa/bbb")
+            with open(self.test_sync_dir_one + "aaa/bbb/something_else.txt", "w") as text_file:
                 text_file.write("Hello changed locally too")
 
-            self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+            self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
             time.sleep(2)
 
-            self.wait_for_file_contents_to_contain(self.test_sync_dir_a + "something.txt", "Hello changed on server")
-            clash_file = glob2.glob(self.test_sync_dir_a + "*.clash_*")[0]
+            self.wait_for_file_contents_to_contain(self.test_sync_dir_one + "something.txt", "Hello changed on server")
+            clash_file = glob2.glob(self.test_sync_dir_one + "*.clash_*")[0]
             self.wait_for_file_contents_to_contain(clash_file, "Hello changed locally too")
 
             self.wait_for_URL_to_appear(self.svn_url + "aaa/something_else.txt")
             self.wait_for_URL_to_appear(self.svn_url + "aaa/bbb/something_else.txt")
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "aaa/another.txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "aaa/another.txt")
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
     def test_cant_start_on_a_non_svn_dav_server(self):
 
-        self.process_a = self.start_subsyncit_without_user_and_password("http://example.com/", self.test_sync_dir_a)
+        self.process_one = self.start_subsyncit_without_user_and_password("http://example.com/", self.test_sync_dir_one)
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "http://example.com/ is not a website that maps subversion to that URL")
+            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://example.com/ is not a website that maps subversion to that URL")
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
     def test_cant_start_on_a_svn_dav_server_with_incorrect_password(self):
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a, passwd="sdfsdfget3qgwegsdgsdgsf")
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", "http://127.0.0.1:8099/svn/testrepo/integrationTests/") # start
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", " is saying that the user is not authorized") # end
+            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://127.0.0.1:8099/svn/testrepo/integrationTests/") # start
+            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", " is saying that the user is not authorized") # end
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
     def test_cant_start_on_a_server_that_is_down(self):
 
-        self.process_a = self.start_subsyncit("https://localhost:34456/", self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit("https://localhost:34456/", self.test_sync_dir_one, self.process_output_one)
         try:
             time.sleep(2)
-            self.wait_for_file_contents_to_contain(self.db_dir_a + "subsyncit.err", " Failed to establish a new connection")
+            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", " Failed to establish a new connection")
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
-        self.process_a.wait()
+        self.process_one.wait()
 
         self.assertEquals(self.get_status_dict()['online'], False)
 
@@ -571,19 +571,19 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.expect201(requests.put(self.svn_url + ".subsyncit-excluded-filename-patterns", auth=(self.user, self.passwd), data=".*\.txt\n\~\$.*\n", verify=False))
 
-        testfile_in_a = self.test_sync_dir_a + "output.txt"
+        testfile_in_a = self.test_sync_dir_one + "output.txt"
         with open(testfile_in_a, "w") as text_file:
             text_file.write("I should not be PUT up to the server")
 
-        testfile_in_a = self.test_sync_dir_a + "~$output"
+        testfile_in_a = self.test_sync_dir_one + "~$output"
         with open(testfile_in_a, "w") as text_file:
             text_file.write("I also should not be PUT up to the server")
 
-        testfile_in_a = self.test_sync_dir_a + "output.zzz"
+        testfile_in_a = self.test_sync_dir_one + "output.zzz"
         with open(testfile_in_a, "w") as text_file:
             text_file.write("Only I can go to the server")
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
 
@@ -603,7 +603,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
     @timedtest
@@ -619,16 +619,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         # self.list_files(self.testSyncDir1)
 
         start = time.time()
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
         try:
             print("Started Subsyncit, and waiting for " + str(self.size) + "MB random file to be downloaded from Svn and be at least " + str(sz) + " MB ... ")
-            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_a + "testBigRandomFile", sz)
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", sz)
             print(" ... took secs: " + str(round(time.time() - start, 1)))
 
             # self.list_files(self.testSyncDir1)
 
-            self.signal_stop_of_subsyncit(self.test_sync_dir_a)
-            self.process_a.wait()
+            self.signal_stop_of_subsyncit(self.test_sync_dir_one)
+            self.process_one.wait()
 
             # self.list_files(self.testSyncDir1)
 
@@ -643,16 +643,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             start = time.time()
 
             print("start Subsyncit again")
-            self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
-            self.wait_for_file_contents_to_be_sized_below(self.test_sync_dir_a + "testBigRandomFile", (sz * 99 / 100))
+            self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
+            self.wait_for_file_contents_to_be_sized_below(self.test_sync_dir_one + "testBigRandomFile", (sz * 99 / 100))
             # self.list_files(self.testSyncDir1)
-            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_a + "testBigRandomFile", (sz / 10))
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", (sz / 10))
             # self.list_files(self.testSyncDir1)
-            self.process_a.kill()
+            self.process_one.kill()
             print("Killed after secs: " + str(round(time.time() - start, 1)))
             # self.list_files(self.testSyncDir1)
 
-            aborted_get_size = os.stat(self.test_sync_dir_a + "testBigRandomFile").st_size
+            aborted_get_size = os.stat(self.test_sync_dir_one + "testBigRandomFile").st_size
 
             print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n \\/")
 
@@ -660,15 +660,15 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             #self.list_files(self.testSyncDir1)
 
-            self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
-            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_a + "testBigRandomFile", sz)
+            self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
+            self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", sz)
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
 
         # self.list_files(self.testSyncDir1)
 
-        clash_file = glob2.glob(self.test_sync_dir_a + "*.clash_*")[0]
+        clash_file = glob2.glob(self.test_sync_dir_one + "*.clash_*")[0]
         self.assertEqual(os.stat(clash_file).st_size, aborted_get_size)
 
 
@@ -707,7 +707,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         test_start = time.time()
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         self.expect201(requests.request('MKCOL', self.svn_url + "fred/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
@@ -715,16 +715,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('PUT', self.svn_url + "wilma/bambam", data="hi", auth=(self.user, self.passwd), verify=False))
 
         try:
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "fred")
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "wilma/bambam")
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "barney")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "fred")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "wilma/bambam")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "barney")
 
             time.sleep(1)
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
-        self.process_a.wait()
+        self.process_one.wait()
 
         # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
         self.assertEquals(self.no_leading_spaces(
@@ -737,7 +737,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
 
         self.should_start_with(rows, 0, "01, fred, None, None")
         self.should_start_with(rows, 1, "02, barney, None, None")
@@ -756,16 +756,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('MKCOL', self.svn_url + "wilma/", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "barney/", auth=(self.user, self.passwd), verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a, extra_opt="--do-not-scan-file-system-periodically")
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one, extra_opt="--do-not-scan-file-system-periodically")
 
         try:
 
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "wilma")
-            with open(self.test_sync_dir_a + "wilma/bambam", "w") as text_file:
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "wilma")
+            with open(self.test_sync_dir_one + "wilma/bambam", "w") as text_file:
                 text_file.write("hi")
 
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "fred")
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "barney")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "fred")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "barney")
             self.wait_for_URL_to_appear(self.svn_url + "wilma/bambam")
 
             # Only 'wilma' gets a actual directory version (to #4) bump, but the repo is bumped to latest everywhere.
@@ -781,18 +781,18 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             time.sleep(2)
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
-        self.process_a.wait()
+        self.process_one.wait()
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_a)
+        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
 
         self.assertEquals(self.no_leading_spaces(
              """01, fred, None, None
                 02, barney, None, None
                 03, wilma, None, None
                 03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
-            "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
+            "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         # self.assertEquals(self.no_leading_spaces(
         #     """[SECTION] Instructions created for 3 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
@@ -825,17 +825,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.expect201(requests.request('MKCOL', self.svn_url + "b/b/a", auth=(self.user, self.passwd), verify=False))
         self.expect201(requests.request('MKCOL', self.svn_url + "b/b/b", auth=(self.user, self.passwd), verify=False))
 
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
 
         try:
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "a/a/b/txt")
-            self.wait_for_file_to_appear(self.test_sync_dir_a + "b/b/b")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "a/a/b/txt")
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "b/b/b")
             time.sleep(1)
 
         finally:
-            self.end_process_a()
+            self.end_process_one()
 
-        self.process_a.wait()
+        self.process_one.wait()
 
         self.assertEquals(self.no_leading_spaces(
             """01, a/a/a, None, None
@@ -852,7 +852,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                07, b/b/a, None, None
                08, b, None, None
                08, b/b, None, None
-               08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_a)))
+               08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         # self.assertEquals(self.simplify_output(self.process_output_a), self.no_leading_spaces(
         #      """[SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
@@ -870,7 +870,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         #     """))
 
 
-        self.fail("dddd")
+        # self.fail("dddd")
 
     # ======================================================================================================
 
@@ -878,21 +878,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         return 200 == requests.get(self.svn_url + path, auth=(self.user, self.passwd), verify=False).status_code
 
 
-    def journal_to_a_and_b(self, s):
-        self.journal_to_a(s)
-        self.journal_to_b(s)
+    def journal_to_one_and_two(self, s):
+        self.journal_to_one(s)
+        self.journal_to_two(s)
 
 
-    def journal_to_a(self, s):
-        self.process_output_a.writelines(s)
+    def journal_to_one(self, s):
+        self.process_output_one.writelines(s)
 
 
-    def journal_to_b(self, s):
-        self.process_output_b.writelines(s)
+    def journal_to_two(self, s):
+        self.process_output_two.writelines(s)
 
 
     def get_status_dict(self):
-        return json.loads(self.file_contents(self.db_dir_a + "status.json"))
+        return json.loads(self.file_contents(self.db_dir_one + "status.json"))
 
 
     def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self):
@@ -983,7 +983,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.assertTrue(rows[row].startswith(start_with_this), msg="Was actually: " + rows[row])
 
     def get_db_rows(self, test_start, sync_dir):
-        db_ = self.db_dir_a + os.sep + "subsyncit.db"
+        db_ = self.db_dir_one + os.sep + "subsyncit.db"
 
         time.sleep(2.5)
         db = TinyDB(db_)
@@ -1069,17 +1069,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.line += ("\n" + line)
 
 
-    def start_a_and_b_subsyncits(self):
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a)
-        self.process_b = self.start_subsyncit(self.svn_url, self.test_sync_dir_b, self.process_output_b)
+    def start_one_and_two_subsyncits(self):
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
+        self.process_two = self.start_subsyncit(self.svn_url, self.test_sync_dir_two, self.process_output_two)
  
 
-    def start_subsyncit_a(self, passwd=None, extra_opt=None, extra_opt2=None):
-        self.process_a = self.start_subsyncit(self.svn_url, self.test_sync_dir_a, self.process_output_a, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
+    def start_subsyncit_one(self, passwd=None, extra_opt=None, extra_opt2=None):
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
 
 
-    def start_subsyncit_b(self, passwd=None, extra_opt=None, extra_opt2=None):
-        self.process_b = self.start_subsyncit(self.svn_url, self.test_sync_dir_b, self.process_output_b, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
+    def start_subsyncit_two(self, passwd=None, extra_opt=None, extra_opt2=None):
+        self.process_two = self.start_subsyncit(self.svn_url, self.test_sync_dir_two, self.process_output_two, passwd=passwd, extra_opt=extra_opt, extra_opt2=extra_opt2)
 
 
     def start_subsyncit(self, svn_repo, dir, process_output, passwd=None, extra_opt=None, extra_opt2=None):
@@ -1168,15 +1168,15 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         pass
 
-    def end_process_a(self):
-        self.end(self.process_a, self.test_sync_dir_a)
+    def end_process_one(self):
+        self.end(self.process_one, self.test_sync_dir_one)
 
-    def end_process_b(self):
-        self.end(self.process_b, self.test_sync_dir_b)
+    def end_process_two(self):
+        self.end(self.process_two, self.test_sync_dir_two)
 
-    def end_process_a_and_b(self):
-        self.end_process_a()
-        self.end_process_b()
+    def end_process_one_and_two(self):
+        self.end_process_one()
+        self.end_process_two()
 
 
 if __name__ == '__main__':

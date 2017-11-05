@@ -6,9 +6,10 @@ import shutil
 
 import sh
 
-def change_to_parent_resources(dir, srcfile):
+def change_to_parent_resources_and_remove_timesstamps(dir, srcfile):
     sh.sed("-i", '', 's/src="/src="..\//', dir + os.sep + srcfile)
     sh.sed("-i", '', 's/style.css/..\/style.css/', dir + os.sep + srcfile)
+    sh.sed("-i", '', '/created at 20/d', dir + os.sep + srcfile)
 
 
 for f in glob.glob("docs/coverage_reports" + os.sep + "test*"):
@@ -47,13 +48,13 @@ for test in glob.glob("integrationTests/*"):
     for f in glob.glob("docs/coverage_reports" + os.sep + testname + os.sep + "*.png"):
         os.remove(f)
     sh.git("add", "docs/coverage_reports" + os.sep + testname)
-    change_to_parent_resources("docs/coverage_reports" + os.sep + testname, "subsyncit_py.html")
-    change_to_parent_resources("docs/coverage_reports" + os.sep + testname, "index.html")
+    change_to_parent_resources_and_remove_timesstamps("docs/coverage_reports" + os.sep + testname, "subsyncit_py.html")
+    change_to_parent_resources_and_remove_timesstamps("docs/coverage_reports" + os.sep + testname, "index.html")
     index_page += '<a href="' + testname + '">' + testname + '</a><br>\n'
 sh.coverage(all_coverages_args)
 sh.coverage("html", "-d", "docs/coverage_reports" + os.sep + "all", "--include", "subsyncit.py")
-change_to_parent_resources("docs/coverage_reports" + os.sep + "all", "subsyncit_py.html")
-change_to_parent_resources("docs/coverage_reports" + os.sep + "all", "index.html")
+change_to_parent_resources_and_remove_timesstamps("docs/coverage_reports" + os.sep + "all", "subsyncit_py.html")
+change_to_parent_resources_and_remove_timesstamps("docs/coverage_reports" + os.sep + "all", "index.html")
 index_page += '</body></html><br>\n<a href="all">all</a>'
 with open("docs/coverage_reports" + os.sep + "index.html", "w") as text_file:
     text_file.write(index_page)

@@ -290,7 +290,7 @@ class MyTinyDBTrace():
 
     def __init__(self, delegate):
         self.delegate = delegate
-        self.always_print = True
+        self.always_print = False
 
     def db_debug(self, msg):
         try:
@@ -727,6 +727,8 @@ def svn_GETs(config, requests_session, excluded_filename_patterns):
     more_to_do = True
     batch = 0
 
+    GETs_for_later = []
+
     # Batches of 100 so that here's intermediate reporting.
     while more_to_do:
         batch += 1
@@ -745,10 +747,10 @@ def svn_GETs(config, requests_session, excluded_filename_patterns):
                 is_file = row['T'] == 'F'
                 old_sha1_should_be = row['LS']
                 curr_rev = row['RV']
-                abs_local_file_path = (config.args.absolute_local_root_path + file_name)
+                abs_local_file_path = config.args.absolute_local_root_path + file_name
                 head = requests_session.head(config.args.svn_url + esc(file_name))
                 if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-                    GET_dir(abs_local_file_path, curr_rev, excluded_filename_patterns, file_name, config, requests_session)
+                    GETs_for_later.append((file_name, curr_rev))
                 else:
                     GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
                     file_count += 1
@@ -761,6 +763,8 @@ def svn_GETs(config, requests_session, excluded_filename_patterns):
                      + ": GETs from Subversion server took %s: " + str(file_count)
                      + " files, and " + str(num_rows - file_count)
                      + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec.", start)
+
+        return GETs_for_later
 
     my_trace(2,  " ---> svn_GETs - end")
 
@@ -799,16 +803,19 @@ def GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, request
     update_row_revision(config.files_table, file_name, rev)
 
 
-def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, file_name, config, requests_session):
-    if not os.path.exists(abs_local_file_path):
-        os.makedirs(abs_local_file_path)
-    curr_rmt_rev = requests_session.svn_revision(config, file_name)
-    if curr_local_rev != curr_rmt_rev:
-        update_row_revision(config.files_table, file_name, curr_rmt_rev)
-        instruct_to_reGET_parent_if_there(config, file_name)
+def instrs_for_dir_GETs(GETs_for_later, excluded_filename_patterns, config, requests_session):
+    for (file_name, curr_local_rev) in GETs_for_later:
+        abs_local_file_path = config.args.absolute_local_root_path + file_name
+        if not os.path.exists(abs_local_file_path):
+            os.makedirs(abs_local_file_path)
+        curr_rmt_rev = requests_session.svn_revision(config, file_name)
+        print("lo=" + str(curr_local_rev) + " ro=" + str(curr_rmt_rev))
+        if curr_local_rev != curr_rmt_rev:
+            update_row_revision(config.files_table, file_name, curr_rmt_rev)
+            instruct_to_reGET_parent_if_there(config, file_name)
 
-        dir_list = svn_dir_list(config, requests_session, esc(file_name))
-        create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, file_name)
+            dir_list = svn_dir_list(config, requests_session, esc(file_name))
+            create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, file_name)
 
 
 def local_deletes(config):
@@ -1314,7 +1321,9 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
 
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                svn_GETs(config, requests_session, excluded_filename_patterns)
+                dir_GETs_todo = svn_GETs(config, requests_session, excluded_filename_patterns)
+                instrs_for_dir_GETs(dir_GETs_todo, excluded_filename_patterns, config, requests_session)
+
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 local_deletes(config)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
@@ -1324,9 +1333,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
-                    svn_files = svn_dir_list(config, requests_session, "")
-                    create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, svn_files, "")
-                    # update_revisions_for_created_directories(requests_session, files_table, args.svn_url, config.db_dir)
+                    instrs_for_dir_GETs([('', state.last_root_revision)], excluded_filename_patterns, config, requests_session)
                     state.last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
         except requests.packages.urllib3.exceptions.NewConnectionError as e:

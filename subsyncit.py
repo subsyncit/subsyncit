@@ -807,9 +807,8 @@ def GET_dir(abs_local_file_path, curr_local_rev, excluded_filename_patterns, fil
         update_row_revision(config.files_table, file_name, curr_rmt_rev)
         instruct_to_reGET_parent_if_there(config, file_name)
 
-        dir = esc(file_name)
-        dir_list = svn_dir_list(config, requests_session, dir)
-        create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, dir)
+        dir_list = svn_dir_list(config, requests_session, esc(file_name))
+        create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, file_name)
 
 
 def local_deletes(config):

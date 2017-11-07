@@ -320,7 +320,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             self.wait_for_file_to_disappear(self.test_sync_dir_one + "output.txt")
 
-            # self.fail("xxx")
         finally:
             self.end_process_one()
 
@@ -544,9 +543,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_cant_start_on_a_non_svn_dav_server(self):
 
-        self.process_one = self.start_subsyncit_without_user_and_password("http://example.com/", self.test_sync_dir_one)
+        self.process_one = self.start_subsyncit_without_user_and_password("http://localhost:8099/", self.test_sync_dir_one)
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://example.com/ is not a website that maps subversion to that URL")
+            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://localhost:8099/ does not have Subversion mounted on that URL")
         finally:
             self.end_process_one()
 
@@ -754,6 +753,15 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.should_start_with(rows, 2, "03, wilma, None, None")
         self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
 
+        output = self.simplify_output(self.process_output_one)
+        print(output)
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] Instructions created for 3 dir GETs (comparison of the dirs/files within '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created for 1 file GETs (comparison of the dirs/files within 'fred, barney, wilma') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec. stack: main:loop:GETs
+            """), output)
+
 
     @timedtest
     def test_that_subsynct_can_participate_in_the_merkel_esque_revisions_with_subversion(self):
@@ -788,12 +796,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                    """),
                 self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
-            time.sleep(2)
+            time.sleep(20)
+
 
         finally:
             self.end_process_one()
 
-        self.process_one.wait()
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_one)
 
@@ -804,13 +812,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
             "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
-        # self.assertEquals(self.no_leading_spaces(
-        #     """[SECTION] Instructions created for 3 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #        [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec.
-        #        [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each .
-        #        [SECTION] Instructions created for 3 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #        [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec.
-        #        """), self.simplify_output(self.process_output_a))
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] Instructions created for 3 dir GETs (comparison of the dirs/files within '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
+                [SECTION] Instructions created for 3 dir GETs (comparison of the dirs/files within '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created for 1 file GETs (comparison of the dirs/files within 'wilma') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 1 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 1 directories, at F files/sec. stack: main:loop:GETs
+            """), self.simplify_output(self.process_output_one))
+
 
     @timedtest
     def test_that_subsynct_can_participate_in_a_deeper_merkle_traversal(self):
@@ -864,23 +876,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                08, b/b, None, None
                08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
-        # self.assertEquals(self.simplify_output(self.process_output_a), self.no_leading_spaces(
-        #      """[SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 2 directories, at F files/sec.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Instructions created for 2 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 4 directories, at F files/sec.
-        #         [SECTION] Instructions created for 1 GETs and 0 local deletes (comparison of all the files on the Subversion server to files in the sync dir) took N ns.
-        #         [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 8 directories, at F files/sec.
-        #         [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec.
-        #     """))
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] Instructions created for 2 dir GETs (comparison of the dirs/files within '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 2 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created for 4 dir GETs (comparison of the dirs/files within 'a, b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 4 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created for 8 dir GETs (comparison of the dirs/files within 'a/a, a/b, b/a, b/b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 8 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created for 1 file GETs (comparison of the dirs/files within 'a/a/a, a/a/b, a/b/a, a/b/b, b/a/a, b/a/b, b/b/a, b/b/b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec. stack: main:loop:GETs
+            """), self.simplify_output(self.process_output_one))
 
-
-        # self.fail("dddd")
 
     # ======================================================================================================
 

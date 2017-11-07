@@ -631,70 +631,6 @@ def PUT_file(config, requests_session, abs_local_file_path, alleged_remote_sha1)
     return dirs_made
 
 
-def create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, files_on_svn_server, directory):
-
-    my_trace(2, " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start")
-
-    start = time.time()
-    unprocessed_files = {}
-
-    Row = Query()
-
-    rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
-    for row in rows:
-        file_name = row['FN']
-        if not excluded_filename_patterns.should_be_excluded(file_name):
-            print("added to unprocessed " + file_name)
-            unprocessed_files[file_name] = {
-                "I" : row["I"],
-                "T" : row["T"],
-                "RS" : row['RS']
-            }
-
-    debug(" ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - start " + str(len(unprocessed_files)))
-
-
-    get_file_count = 0
-    get_dir_count = 0
-    local_deletes = 0
-    for file_name, rev, sha1 in files_on_svn_server:
-        if excluded_filename_patterns.should_be_excluded(file_name):
-            continue
-        match = None
-        if file_name in unprocessed_files:
-                match = unprocessed_files[file_name]
-                unprocessed_files.pop(file_name)
-        if match:
-            if match["I"] != None:
-                continue
-            if not match['RS'] == sha1:
-                update_instruction_in_table(config.files_table, GET_FROM_SERVER, file_name)
-                if match['T'] == 'F':
-                    get_file_count += 1
-                else:
-                    get_dir_count += 1
-        else:
-            upsert_row_in_table(config.files_table, file_name, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
-            if sha1:
-                get_file_count += 1
-            else:
-                get_dir_count += 1
-
-    # files still in the unprocessed_files list are not up on Subversion
-    for file_name, val in unprocessed_files.items():
-        local_deletes += 1
-        update_instruction_in_table(config.files_table, DELETE_LOCALLY, file_name)
-
-    fd = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
-    dc = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
-    ld = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
-
-    section_end(get_file_count > 0 or get_dir_count > 0 or local_deletes > 0,  "Instructions created for"
-                + fd + dc + ld + " (comparison of the dirs/files within " + directory + ") took %s.", start)
-
-    my_trace(2,  " ---> create_GETs_and_local_deletes_instructions_after_comparison_to_files_on_subversion_server - end")
-
-
 def english_duration(duration):
     if duration < .001:
         return str(round(duration*1000000)) + " ns"
@@ -804,18 +740,82 @@ def GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, request
 
 
 def instrs_for_dir_GETs(GETs_for_later, excluded_filename_patterns, config, requests_session):
-    for (file_name, curr_local_rev) in GETs_for_later:
-        abs_local_file_path = config.args.absolute_local_root_path + file_name
-        if not os.path.exists(abs_local_file_path):
-            os.makedirs(abs_local_file_path)
-        curr_rmt_rev = requests_session.svn_revision(config, file_name)
-        print("lo=" + str(curr_local_rev) + " ro=" + str(curr_rmt_rev))
-        if curr_local_rev != curr_rmt_rev:
-            update_row_revision(config.files_table, file_name, curr_rmt_rev)
-            instruct_to_reGET_parent_if_there(config, file_name)
 
-            dir_list = svn_dir_list(config, requests_session, esc(file_name))
-            create_GET_and_local_delete_instructions_if_needed(config, excluded_filename_patterns, dir_list, file_name)
+    my_trace(2, " ---> instrs_for_dir_GETs - start")
+
+    get_file_count = 0
+    get_dir_count = 0
+    local_deletes = 0
+    start = time.time()
+
+    directories = []
+
+    try:
+        for (directory, curr_local_rev) in GETs_for_later:
+            abs_local_file_path = config.args.absolute_local_root_path + directory
+            if not os.path.exists(abs_local_file_path):
+                os.makedirs(abs_local_file_path)
+            curr_rmt_rev = requests_session.svn_revision(config, directory)
+            print("lo=" + str(curr_local_rev) + " ro=" + str(curr_rmt_rev))
+            if curr_local_rev != curr_rmt_rev:
+                update_row_revision(config.files_table, directory, curr_rmt_rev)
+                instruct_to_reGET_parent_if_there(config, directory)
+
+                dir_list = svn_dir_list(config, requests_session, esc(directory))
+
+                unprocessed_files = {}
+
+                Row = Query()
+
+                rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
+                for row in rows:
+                    fn = row['FN']
+                    if not excluded_filename_patterns.should_be_excluded(fn):
+                        print("added to unprocessed " + fn)
+                        unprocessed_files[fn] = {
+                            "I": row["I"],
+                            "T": row["T"],
+                            "RS": row['RS']
+                        }
+
+                for fn, rev, sha1 in dir_list:
+                    if excluded_filename_patterns.should_be_excluded(fn):
+                        continue
+                    match = None
+                    if fn in unprocessed_files:
+                        match = unprocessed_files[fn]
+                        unprocessed_files.pop(fn)
+                    if match:
+                        if match["I"] != None:
+                            continue
+                        if not match['RS'] == sha1:
+                            update_instruction_in_table(config.files_table, GET_FROM_SERVER, fn)
+                            if match['T'] == 'F':
+                                get_file_count += 1
+                            else:
+                                get_dir_count += 1
+                    else:
+                        upsert_row_in_table(config.files_table, fn, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
+                        if sha1:
+                            get_file_count += 1
+                        else:
+                            get_dir_count += 1
+
+                # files still in the unprocessed_files list are not up on Subversion
+                for fn, val in unprocessed_files.items():
+                    local_deletes += 1
+                    update_instruction_in_table(config.files_table, DELETE_LOCALLY, fn)
+                directories.append(directory)
+    finally:
+
+        fd = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+        dc = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+        ld = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
+
+        section_end(get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, "Instructions created for"
+                    + fd + dc + ld + " (comparison of the dirs/files within " + ",".join(directories) + ") took %s. stack:" + stack_trace(), start)
+
+    my_trace(2, " ---> instrs_for_dir_GETs - end")
 
 
 def local_deletes(config):
@@ -1322,6 +1322,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 dir_GETs_todo = svn_GETs(config, requests_session, excluded_filename_patterns)
+                print ("instrs_for_dir_GETs 1" + str(len(dir_GETs_todo)))
                 instrs_for_dir_GETs(dir_GETs_todo, excluded_filename_patterns, config, requests_session)
 
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
@@ -1333,6 +1334,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
+                    print("instrs_for_dir_GETs 2 1")
                     instrs_for_dir_GETs([('', state.last_root_revision)], excluded_filename_patterns, config, requests_session)
                     state.last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)

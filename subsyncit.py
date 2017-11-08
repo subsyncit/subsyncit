@@ -738,6 +738,7 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
 
     get_file_count = 0
     get_dir_count = 0
+    make_dir_count = 0
     local_deletes = 0
     start = time.time()
 
@@ -745,9 +746,12 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
 
     try:
         for (directory, curr_local_rev) in GETs_for_later:
+            actioned = False
             abs_local_file_path = config.args.absolute_local_root_path + directory
             if not os.path.exists(abs_local_file_path):
                 os.makedirs(abs_local_file_path)
+                make_dir_count += 1
+                actioned = True
             curr_rmt_rev = requests_session.svn_revision(config, directory)
             if curr_local_rev != curr_rmt_rev:
                 update_row_revision(config.files_table, directory, curr_rmt_rev)
@@ -781,12 +785,14 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
                             continue
                         if not match['RS'] == sha1:
                             update_instruction_in_table(config.files_table, GET_FROM_SERVER, fn)
+                            actioned = True
                             if match['T'] == 'F':
                                 get_file_count += 1
                             else:
                                 get_dir_count += 1
                     else:
                         upsert_row_in_table(config.files_table, fn, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
+                        actioned = True
                         if sha1:
                             get_file_count += 1
                         else:
@@ -796,15 +802,17 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
                 for fn, val in unprocessed_files.items():
                     local_deletes += 1
                     update_instruction_in_table(config.files_table, DELETE_LOCALLY, fn)
-                directories.append(directory)
+                if actioned:
+                    directories.append(directory)
     finally:
 
-        fd = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
-        dc = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+        fg = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+        dg = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
         ld = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
-
-        section_end(get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, "Instructions created for"
-                    + fd + dc + ld + " (comparison of the dirs/files within '" + ", ".join(directories) + "') took %s." + stack_trace(), start)
+        mdc = "Actual mkdirs: " +str(make_dir_count) + ";" if make_dir_count > 0 else ""
+        instr = " Instructions created:" + fg + dg + ld if len(fg) + len(dg) + len(ld) > 0 else ""
+        msg = (mdc + instr + " (re dirs/files '" + ", ".join(directories)[:60] + "') took %s." + stack_trace()).lstrip()
+        section_end(make_dir_count > 0 or get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, msg, start)
 
 
 def local_deletes(config):

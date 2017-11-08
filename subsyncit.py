@@ -811,12 +811,12 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
                     directories.append(directory)
     finally:
 
-        fg = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
-        dg = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
-        ld = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
+        files_str = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+        dirs_str = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+        deltes_str = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
         mdc = "Actual mkdirs: " +str(make_dir_count) + ";" if make_dir_count > 0 else ""
-        instr = " Instructions created:" + fg + dg + ld if len(fg) + len(dg) + len(ld) > 0 else ""
-        msg = (mdc + instr + " (re dirs/files '" + ", ".join(directories)[:60] + "') took %s." + stack_trace()).lstrip()
+        instr = " Instructions created:" + files_str + dirs_str + deltes_str if len(files_str) + len(dirs_str) + len(deltes_str) > 0 else ""
+        msg = (mdc + instr + " (children of '" + ", ".join(directories)[:60] + "') took %s." + stack_trace()).lstrip()
         section_end(make_dir_count > 0 or get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, msg, start)
 
 

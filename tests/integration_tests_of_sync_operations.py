@@ -354,11 +354,29 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             b_path = self.test_sync_dir_two + "testfile"
             self.wait_for_file_to_appear(b_path)
             time.sleep(.1)
-            self.journal_to_one_and_two("-- orig sync'd from a to b --")
+            self.journal_to_one_and_two("-- orig sync'd from one to two --")
             os.remove(b_path)
             self.wait_for_file_to_disappear(a_path)
+            time.sleep(2)
         finally:
             self.end_process_one_and_two()
+
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] File system scan for extra PUTs: 1 missed adds and 0 missed changes (added/changed while Subsyncit was not running) took M ms.
+                [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
+                -- orig sync'd from one to two --
+                [SECTION] Instructions created: 1 local deletes (children of '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Performing 1 local deletes took M ms. stack: main:loop:local_deletes             
+            """), self.simplify_output(self.process_output_one))
+
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] Instructions created: 1 file GETs (children of '') took M ms. stack: main:loop:GETsʔ
+                -- orig sync'd from one to two --
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (testfile), at F files/sec. stack: main:loop:GETs
+                [SECTION] : 1 extra DELETEs (deleted locally while Subsyncit was not running) took M ms.
+                [SECTION] DELETEs on Subversion server took M ms, 0 directories and 1 files, S secs per DELETE.
+            """), self.simplify_output(self.process_output_two))
+
 
 
     @timedtest
@@ -821,7 +839,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Instructions created: 1 file GETs (children of 'wilma') took M ms. stack: main:loop:GETsʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 1 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 dirs, at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 
 
@@ -901,11 +918,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
     def journal_to_one(self, s):
-        self.process_output_one.writelines(s)
+        self.process_output_one.writelines(s + "\n")
 
 
     def journal_to_two(self, s):
-        self.process_output_two.writelines(s)
+        self.process_output_two.writelines(s + "\n")
 
 
     def get_status_dict(self):
@@ -1179,9 +1196,10 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         regex2 = re.compile(r"[0-9]\d*(\.\d*)? ms")
         regex3 = re.compile(r"[0-9]\d*(\.\d*)? ns")
         regex4 = re.compile(r"[0-9]\d*(\.\d*)? files/sec")
+        regex5 = re.compile(r"[0-9]\d*(\.\d*)? secs per")
         for line in op.splitlines():
-            rv += regex4.sub("F files/sec", regex3.sub("N ns", regex2.sub("M ms", regex.sub("", line)))) + "\n"
-        return rv
+            rv += regex5.sub("S secs per", regex4.sub("F files/sec", regex3.sub("N ns", regex2.sub("M ms", regex.sub("", line))))) + "\n"
+        return rv.replace("N ns", "M ms")
 
         pass
 

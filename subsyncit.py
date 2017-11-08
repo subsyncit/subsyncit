@@ -639,7 +639,7 @@ def local_deletes(config):
                 os.remove(name)
                 deletes += 1
                 config.files_table.remove(Query().FN == file_name)
-                reGETsʔ(config, file_name)
+                parentGETʔ(config, file_name)
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
@@ -870,8 +870,7 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
 
     start = time.time()
 
-    to_add = 0
-    to_change = 0
+    to_add = to_change = 0
     for entry in scantree(config.args.absolute_local_root_path):
         if state.is_shutting_down:
             break
@@ -900,7 +899,7 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
                 to_change += 1
 
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
-          + " missed changes (added/changed while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
+          + " missed changes (added/changed while Subsyncit was not running) took %s.", start)
 
     return to_add + to_change
 
@@ -922,7 +921,7 @@ def scan_for_any_missed_deletes(config, state):
             to_delete += 1
 
     section_end(to_delete > 0,  ": " + str(to_delete)
-             + " extra DELETEs (deleted locally while Subsyncit was not running or somehow missed the attention of the file-system watcher) took %s.", start)
+             + " extra DELETEs (deleted locally while Subsyncit was not running) took %s.", start)
 
     return to_delete
 
@@ -969,12 +968,16 @@ def DELETEs(config, requests_session):
 
     rows = config.files_table.search(Query().I == DELETE_ON_SERVER)
 
-    files_deleted = 0
-    directories_deleted = 0
+    files_deleted = directories_deleted = 0
     for row in rows:
         rfn = row['FN']
         requests_delete = requests_session.delete(config.args.svn_url + esc(rfn).replace(os.sep, "/"))
+        if requests_delete.status_code != 204:
+            continue
         output = requests_delete.text
+        if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
+            print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
+            exit(10)
         if row['T'] == 'F':
             files_deleted += 1
             config.files_table.remove(Query().FN == row['FN'])
@@ -983,13 +986,9 @@ def DELETEs(config, requests_session):
             config.files_table.remove(Query().FN == row['FN'])
             # TODO LIKE
 
-        if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
-            print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
-        reGETsʔ(config, rfn)
+        parentGETʔ(config, rfn)
 
-    speed = "."
-    if len(rows) > 0:
-        speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE."
+    speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE." if len(rows) > 0 else "."
 
     section_end(files_deleted > 0 or directories_deleted > 0,  "DELETEs on Subversion server took %s, "
           + str(directories_deleted) + " directories and " + str(files_deleted) + " files"
@@ -1004,7 +1003,7 @@ def MKCOL(requests_session, dir, config):
     raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
 
 
-def reGETsʔ(config, file_name):
+def parentGETʔ(config, file_name):
     parent = dirname(file_name)
     if parent and parent != "":
         parent_row = config.files_table.get(Query().FN == parent)
@@ -1014,12 +1013,8 @@ def reGETsʔ(config, file_name):
 
 def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session):
 
-    get_file_count = 0
-    get_dir_count = 0
-    make_dir_count = 0
-    local_deletes = 0
+    get_file_count = get_dir_count = make_dir_count = local_deletes = 0
     start = time.time()
-
     directories = []
 
     try:
@@ -1033,7 +1028,7 @@ def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session)
             curr_rmt_rev = requests_session.svn_revision(config, directory)
             if curr_local_rev != curr_rmt_rev:
                 update_row_revision(config.files_table, directory, curr_rmt_rev)
-                reGETsʔ(config, directory)
+                parentGETʔ(config, directory)
 
                 dir_list = svn_dir_list(config, requests_session, esc(directory))
 
@@ -1129,10 +1124,7 @@ def PUTs(config, requests_session):
         batch += 1
         more_to_do = False
         start = time.time()
-        num_rows = 0
-        put_count = 0
-        dirs_made = 0
-        not_actually_changed = 0
+        num_rows = put_count = dirs_made = not_actually_changed = 0
         try:
             rows = config.files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
@@ -1159,7 +1151,7 @@ def PUTs(config, requests_session):
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
                         update_sha_and_revision_for_row(requests_session, config.files_table, rel_file_name, new_local_sha1, config, size_ts)
-                        reGETsʔ(config, rel_file_name)
+                        parentGETʔ(config, rel_file_name)
                         put_count += 1
                         update_instruction_in_table(config.files_table, None, rel_file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
@@ -1242,8 +1234,7 @@ def GETs(config, requests_session):
         batch += 1
         more_to_do = False
         start = time.time()
-        num_rows = 0
-        file_count = 0
+        num_rows = file_count = 0
 
         try:
             rows = config.files_table.search(Query().I == GET_FROM_SERVER)
@@ -1262,7 +1253,8 @@ def GETs(config, requests_session):
                     file_count += 1
                     gets_list.append(file_name)
                 update_instruction_in_table(config.files_table, None, file_name)
-                reGETsʔ(config, file_name)
+                if file_count > 0:
+                    parentGETʔ(config, file_name)
 
         finally:
 

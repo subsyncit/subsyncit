@@ -555,14 +555,6 @@ def get_suffix(file_name):
     return extension
 
 
-def MKCOL(requests_session, dir, config):
-    request = requests_session.mkcol(config.args.svn_url + dir.replace(os.sep, "/"))
-    rc = request.status_code
-    if rc == 201:
-        return requests_session.svn_revision(config, dir.replace(os.sep, "/"))
-    raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
-
-
 def esc(name):
     return name.replace("?", "%3F").replace("&", "%26")
 
@@ -606,31 +598,6 @@ def make_directories_if_missing_in_db(config, dname, requests_session):
     return dirs_made
 
 
-def PUT(config, requests_session, abs_local_file_path, alleged_remote_sha1):
-    dirs_made = 0
-    s1 = os.path.getsize(abs_local_file_path)
-    time.sleep(0.1)
-    s2 = os.path.getsize(abs_local_file_path)
-    if s1 != s2:
-        raise NotPUTtingAsFileStillBeingWrittenTo(abs_local_file_path)
-    file_name = get_file_name(config, abs_local_file_path)
-
-    dirs_made += make_directories_if_missing_in_db(config, dirname(file_name), requests_session)
-
-    if alleged_remote_sha1:
-        (ver, actual_remote_sha1, not_used_here) = svn_details(config, requests_session, file_name)
-        if actual_remote_sha1 and actual_remote_sha1 != alleged_remote_sha1:
-            raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser() # force into clash scenario later
-
-    # TODO has it changed on server
-    with open(abs_local_file_path, "rb") as f:
-        put = requests_session.put(config.args.svn_url + esc(file_name).replace(os.sep, "/"), data=f.read())
-        output = put.text
-        if put.status_code != 201 and put.status_code != 204:
-            raise NotPUTtingAsTheServerObjected(put.status_code, output)
-    return dirs_made
-
-
 def english_duration(duration):
     if duration < .001:
         return str(round(duration*1000000)) + " ns"
@@ -655,169 +622,6 @@ def extract_name_type_rev(entry_xml_element):
     file_name = entry_xml_element.findtext("name")
     rev = entry_xml_element.find("commit").attrib['revision']
     return file_or_dir, file_name, rev
-
-
-def GETs(config, requests_session):
-
-    more_to_do = True
-    batch = 0
-
-    GETs_for_later = []
-    gets_list = []
-
-    # Batches of 100 so that here's intermediate reporting.
-    while more_to_do:
-        batch += 1
-        more_to_do = False
-        start = time.time()
-        num_rows = 0
-        file_count = 0
-
-        try:
-            rows = config.files_table.search(Query().I == GET_FROM_SERVER)
-            num_rows = len(rows)
-            for row in rows:
-                file_name = row['FN']
-                is_file = row['T'] == 'F'
-                old_sha1_should_be = row['LS']
-                curr_rev = row['RV']
-                abs_local_file_path = config.args.absolute_local_root_path + file_name
-                head = requests_session.head(config.args.svn_url + esc(file_name))
-                if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
-                    GETs_for_later.append((file_name, curr_rev))
-                else:
-                    GET(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
-                    file_count += 1
-                    gets_list.append(file_name)
-                update_instruction_in_table(config.files_table, None, file_name)
-                reGETsʔ(config, file_name)
-
-        finally:
-
-            files_str = str(file_count) + " files (" + ", ".join(gets_list) + ")" if file_count > 0 else ""
-            dirs_str = str(num_rows - file_count) + " dirs" if (num_rows - file_count) > 0 else ""
-            if len(files_str) > 0 and len(dirs_str) > 0:
-                files_str += ", "
-            section_end(num_rows > 0,  "Batch " + str(batch) + " of"
-                     + ": GETs from Svn took %s: " + files_str + dirs_str
-                     + ", at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec." + stack_trace(), start)
-
-    return GETs_for_later
-
-
-def reGETsʔ(config, file_name):
-    parent = dirname(file_name)
-    if parent and parent != "":
-        parent_row = config.files_table.get(Query().FN == parent)
-        if parent_row and parent_row['I'] == None:
-            update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
-
-
-def GET(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session):
-    (rev, sha1, svn_baseline_rel_path_not_used) \
-        = svn_details(config, requests_session, file_name)
-    get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
-    # debug(absolute_local_root_path + file_name + ": GET " + str(get.status_code) + " " + str(rev))
-    # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
-    # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
-    if os.path.exists(abs_local_file_path):
-        local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-        if local_sha1 != old_sha1_should_be:
-            clash_file_name = abs_local_file_path + ".clash_" + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-            os.rename(abs_local_file_path, clash_file_name)
-    with open(abs_local_file_path, 'wb') as f:
-        for chunk in get.iter_content(chunk_size=500000000):
-            if chunk:
-                f.write(chunk)
-    sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-    try:
-        osstat = os.stat(abs_local_file_path)
-        size_ts = osstat.st_size + osstat.st_mtime
-    except FileNotFoundError:
-        size_ts = 0 # test_a_deleted_file_syncs_back stimulates this
-    update_row_shas_size_and_timestamp(config.files_table, file_name, sha1, size_ts)
-    update_row_revision(config.files_table, file_name, rev)
-
-
-def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session):
-
-    get_file_count = 0
-    get_dir_count = 0
-    make_dir_count = 0
-    local_deletes = 0
-    start = time.time()
-
-    directories = []
-
-    try:
-        for (directory, curr_local_rev) in GETs_for_later:
-            actioned = False
-            abs_local_file_path = config.args.absolute_local_root_path + directory
-            if not os.path.exists(abs_local_file_path):
-                os.makedirs(abs_local_file_path)
-                make_dir_count += 1
-                actioned = True
-            curr_rmt_rev = requests_session.svn_revision(config, directory)
-            if curr_local_rev != curr_rmt_rev:
-                update_row_revision(config.files_table, directory, curr_rmt_rev)
-                reGETsʔ(config, directory)
-
-                dir_list = svn_dir_list(config, requests_session, esc(directory))
-
-                unprocessed_files = {}
-
-                Row = Query()
-
-                rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
-                for row in rows:
-                    fn = row['FN']
-                    if not excluded_filename_patterns.should_be_excluded(fn):
-                        unprocessed_files[fn] = {
-                            "I": row["I"],
-                            "T": row["T"],
-                            "RS": row['RS']
-                        }
-
-                for fn, rev, sha1 in dir_list:
-                    if excluded_filename_patterns.should_be_excluded(fn):
-                        continue
-                    match = None
-                    if fn in unprocessed_files:
-                        match = unprocessed_files[fn]
-                        unprocessed_files.pop(fn)
-                    if match:
-                        if match["I"] != None:
-                            continue
-                        if not match['RS'] == sha1:
-                            update_instruction_in_table(config.files_table, GET_FROM_SERVER, fn)
-                            actioned = True
-                            if match['T'] == 'F':
-                                get_file_count += 1
-                            else:
-                                get_dir_count += 1
-                    else:
-                        upsert_row_in_table(config.files_table, fn, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
-                        actioned = True
-                        if sha1:
-                            get_file_count += 1
-                        else:
-                            get_dir_count += 1
-
-                # files still in the unprocessed_files list are not up on Subversion
-                for fn, val in unprocessed_files.items():
-                    local_deletes += 1
-                    update_instruction_in_table(config.files_table, DELETE_LOCALLY, fn)
-                if actioned:
-                    directories.append(directory)
-    finally:
-
-        files_str = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
-        dirs_str = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
-        deltes_str = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
-        mdc = "Actual mkdirs: " +str(make_dir_count) + ";" if make_dir_count > 0 else ""
-        instr = " Instructions created:" + files_str + dirs_str + deltes_str if len(files_str) + len(dirs_str) + len(deltes_str) > 0 else ""
-        msg = (mdc + instr + " (children of '" + ", ".join(directories)[:60] + "') took %s." + stack_trace()).lstrip()
-        section_end(make_dir_count > 0 or get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, msg, start)
 
 
 def local_deletes(config):
@@ -938,90 +742,6 @@ def extract_path_from_baseline_rel_path(config, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def PUTs(config, requests_session):
-
-    possible_clash_encountered = False
-    more_to_do = True
-    batch = 0
-
-    # Batches of 100 so that here's intermediate reporting.
-    while more_to_do:
-        batch += 1
-        more_to_do = False
-        start = time.time()
-        num_rows = 0
-        put_count = 0
-        dirs_made = 0
-        not_actually_changed = 0
-        try:
-            rows = config.files_table.search(Query().I == PUT_ON_SERVER)
-            num_rows = len(rows)
-            for row in rows:
-                rel_file_name = row['FN']
-                try:
-                    abs_local_file_path = (config.args.absolute_local_root_path + rel_file_name)
-                    new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                    output = ""
-                    # print("-new_local_sha1=" + new_local_sha1)
-                    # print("-row['RS']=" + str(row['RS']))
-                    # print("-row['LS']=" + str(row['LS']))
-                    if new_local_sha1 == 'FILE_MISSING' or (row['RS'] == row['LS'] and row['LS'] == new_local_sha1):
-                        pass
-                        # files that come down as new/changed, get written to the FS trigger a file added/changed message,
-                        # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
-                        # don't do it.
-
-                        num_rows = num_rows -1
-                        update_instruction_in_table(config.files_table, None, rel_file_name)
-                    else:
-                        dirs_made += PUT(config, requests_session, abs_local_file_path, row['RS'])  # <h1>Created</h1>
-
-                        osstat = os.stat(abs_local_file_path)
-                        size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(requests_session, config.files_table, rel_file_name, new_local_sha1, config, size_ts)
-                        reGETsʔ(config, rel_file_name)
-                        put_count += 1
-                        update_instruction_in_table(config.files_table, None, rel_file_name)
-                except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
-                    # Let another cycle get back to the and the GET to win.
-                    not_actually_changed += 1
-                    possible_clash_encountered = True
-                    update_instruction_in_table(config.files_table, None, rel_file_name)
-                except NotPUTtingAsFileStillBeingWrittenTo as e:
-                    not_actually_changed += 1
-                    update_instruction_in_table(config.files_table, None, rel_file_name)
-                except NotPUTtingAsTheServerObjected as e:
-                    not_actually_changed += 1
-                    if "txn-current-lock': Permission denied" in e.message:
-                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
-                    else:
-                        print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
-                if put_count == 100:
-                    more_to_do = True
-                    batch += 1
-                    break
-        finally:
-
-            not_actually_changed_blurb = ""
-            if not_actually_changed > 0:
-                not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
-
-            if put_count > 0:
-                speed = "taking " + english_duration(round((time.time() - start)/put_count, 2)) + " each"
-            else:
-                speed = ""
-
-            dirs_made_blurb = ""
-            if dirs_made > 0:
-                dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
-
-            section_end(num_rows > 0 or put_count > 0,  "Batch " + str(batch) + " of"
-                 + ": PUTs on Subversion server took %s, " + str(put_count)
-                 + " PUT files, " + not_actually_changed_blurb
-                 + speed + dirs_made_blurb + "." + stack_trace(), start)
-
-    return possible_clash_encountered
-
 def update_sha_and_revision_for_row(requests_session, files_table, file_name, local_sha1, config, size_ts):
     elements_for = svn_dir_list(config, requests_session, file_name)
     i = len(elements_for)
@@ -1037,39 +757,6 @@ def update_sha_and_revision_for_row(requests_session, files_table, file_name, lo
             'ST': size_ts
         }, Query().FN == file_name)
 
-
-def svn_DELETEs(config, requests_session):
-
-    start = time.time()
-
-    rows = config.files_table.search(Query().I == DELETE_ON_SERVER)
-
-    files_deleted = 0
-    directories_deleted = 0
-    for row in rows:
-        rfn = row['FN']
-        requests_delete = requests_session.delete(config.args.svn_url + esc(rfn).replace(os.sep, "/"))
-        output = requests_delete.text
-        # debug(row['FN'] + ": DELETE " + str(requests_delete.status_code))
-        if row['T'] == 'F':
-            files_deleted += 1
-            config.files_table.remove(Query().FN == row['FN'])
-        else:
-            directories_deleted += 1
-            config.files_table.remove(Query().FN == row['FN'])
-            # TODO LIKE
-
-        if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
-            print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
-        reGETsʔ(config, rfn)
-
-    speed = "."
-    if len(rows) > 0:
-        speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE."
-
-    section_end(files_deleted > 0 or directories_deleted > 0,  "DELETEs on Subversion server took %s, "
-          + str(directories_deleted) + " directories and " + str(files_deleted) + " files"
-          + speed, start)
 
 def svn_details(config, requests_session, file_name):
     ver = 0
@@ -1276,6 +963,320 @@ def make_hidden_on_windows_too(path):
         ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
 
 
+def DELETEs(config, requests_session):
+
+    start = time.time()
+
+    rows = config.files_table.search(Query().I == DELETE_ON_SERVER)
+
+    files_deleted = 0
+    directories_deleted = 0
+    for row in rows:
+        rfn = row['FN']
+        requests_delete = requests_session.delete(config.args.svn_url + esc(rfn).replace(os.sep, "/"))
+        output = requests_delete.text
+        if row['T'] == 'F':
+            files_deleted += 1
+            config.files_table.remove(Query().FN == row['FN'])
+        else:
+            directories_deleted += 1
+            config.files_table.remove(Query().FN == row['FN'])
+            # TODO LIKE
+
+        if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
+            print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
+        reGETsʔ(config, rfn)
+
+    speed = "."
+    if len(rows) > 0:
+        speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE."
+
+    section_end(files_deleted > 0 or directories_deleted > 0,  "DELETEs on Subversion server took %s, "
+          + str(directories_deleted) + " directories and " + str(files_deleted) + " files"
+          + speed, start)
+
+
+def MKCOL(requests_session, dir, config):
+    request = requests_session.mkcol(config.args.svn_url + dir.replace(os.sep, "/"))
+    rc = request.status_code
+    if rc == 201:
+        return requests_session.svn_revision(config, dir.replace(os.sep, "/"))
+    raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
+
+
+def reGETsʔ(config, file_name):
+    parent = dirname(file_name)
+    if parent and parent != "":
+        parent_row = config.files_table.get(Query().FN == parent)
+        if parent_row and parent_row['I'] == None:
+            update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
+
+
+def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session):
+
+    get_file_count = 0
+    get_dir_count = 0
+    make_dir_count = 0
+    local_deletes = 0
+    start = time.time()
+
+    directories = []
+
+    try:
+        for (directory, curr_local_rev) in GETs_for_later:
+            actioned = False
+            abs_local_file_path = config.args.absolute_local_root_path + directory
+            if not os.path.exists(abs_local_file_path):
+                os.makedirs(abs_local_file_path)
+                make_dir_count += 1
+                actioned = True
+            curr_rmt_rev = requests_session.svn_revision(config, directory)
+            if curr_local_rev != curr_rmt_rev:
+                update_row_revision(config.files_table, directory, curr_rmt_rev)
+                reGETsʔ(config, directory)
+
+                dir_list = svn_dir_list(config, requests_session, esc(directory))
+
+                unprocessed_files = {}
+
+                Row = Query()
+
+                rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
+                for row in rows:
+                    fn = row['FN']
+                    if not excluded_filename_patterns.should_be_excluded(fn):
+                        unprocessed_files[fn] = {
+                            "I": row["I"],
+                            "T": row["T"],
+                            "RS": row['RS']
+                        }
+
+                for fn, rev, sha1 in dir_list:
+                    if excluded_filename_patterns.should_be_excluded(fn):
+                        continue
+                    match = None
+                    if fn in unprocessed_files:
+                        match = unprocessed_files[fn]
+                        unprocessed_files.pop(fn)
+                    if match:
+                        if match["I"] != None:
+                            continue
+                        if not match['RS'] == sha1:
+                            update_instruction_in_table(config.files_table, GET_FROM_SERVER, fn)
+                            actioned = True
+                            if match['T'] == 'F':
+                                get_file_count += 1
+                            else:
+                                get_dir_count += 1
+                    else:
+                        upsert_row_in_table(config.files_table, fn, 0, "D" if sha1 is None else "F", instruction=GET_FROM_SERVER)
+                        actioned = True
+                        if sha1:
+                            get_file_count += 1
+                        else:
+                            get_dir_count += 1
+
+                # files still in the unprocessed_files list are not up on Subversion
+                for fn, val in unprocessed_files.items():
+                    local_deletes += 1
+                    update_instruction_in_table(config.files_table, DELETE_LOCALLY, fn)
+                if actioned:
+                    directories.append(directory)
+    finally:
+
+        files_str = " " + str(get_file_count) + " file GETs" if get_file_count > 0 else ""
+        dirs_str = " " + str(get_dir_count) + " dir GETs" if get_dir_count > 0 else ""
+        deltes_str = " " + str(local_deletes) + " local deletes" if local_deletes > 0 else ""
+        mdc = "Actual mkdirs: " +str(make_dir_count) + ";" if make_dir_count > 0 else ""
+        instr = " Instructions created:" + files_str + dirs_str + deltes_str if len(files_str) + len(dirs_str) + len(deltes_str) > 0 else ""
+        msg = (mdc + instr + " (children of '" + ", ".join(directories)[:60] + "') took %s." + stack_trace()).lstrip()
+        section_end(make_dir_count > 0 or get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, msg, start)
+
+
+def PUT(config, requests_session, abs_local_file_path, alleged_remote_sha1):
+    dirs_made = 0
+    s1 = os.path.getsize(abs_local_file_path)
+    time.sleep(0.1)
+    s2 = os.path.getsize(abs_local_file_path)
+    if s1 != s2:
+        raise NotPUTtingAsFileStillBeingWrittenTo(abs_local_file_path)
+    file_name = get_file_name(config, abs_local_file_path)
+
+    dirs_made += make_directories_if_missing_in_db(config, dirname(file_name), requests_session)
+
+    if alleged_remote_sha1:
+        (ver, actual_remote_sha1, not_used_here) = svn_details(config, requests_session, file_name)
+        if actual_remote_sha1 and actual_remote_sha1 != alleged_remote_sha1:
+            raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser() # force into clash scenario later
+
+    # TODO has it changed on server
+    with open(abs_local_file_path, "rb") as f:
+        put = requests_session.put(config.args.svn_url + esc(file_name).replace(os.sep, "/"), data=f.read())
+        output = put.text
+        if put.status_code != 201 and put.status_code != 204:
+            raise NotPUTtingAsTheServerObjected(put.status_code, output)
+    return dirs_made
+
+
+def PUTs(config, requests_session):
+
+    possible_clash_encountered = False
+    more_to_do = True
+    batch = 0
+
+    # Batches of 100 so that here's intermediate reporting.
+    while more_to_do:
+        batch += 1
+        more_to_do = False
+        start = time.time()
+        num_rows = 0
+        put_count = 0
+        dirs_made = 0
+        not_actually_changed = 0
+        try:
+            rows = config.files_table.search(Query().I == PUT_ON_SERVER)
+            num_rows = len(rows)
+            for row in rows:
+                rel_file_name = row['FN']
+                try:
+                    abs_local_file_path = (config.args.absolute_local_root_path + rel_file_name)
+                    new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+                    output = ""
+                    # print("-new_local_sha1=" + new_local_sha1)
+                    # print("-row['RS']=" + str(row['RS']))
+                    # print("-row['LS']=" + str(row['LS']))
+                    if new_local_sha1 == 'FILE_MISSING' or (row['RS'] == row['LS'] and row['LS'] == new_local_sha1):
+                        pass
+                        # files that come down as new/changed, get written to the FS trigger a file added/changed message,
+                        # and superficially look like they should get pushed back to the server. If the sha1 is unchanged
+                        # don't do it.
+
+                        num_rows = num_rows -1
+                        update_instruction_in_table(config.files_table, None, rel_file_name)
+                    else:
+                        dirs_made += PUT(config, requests_session, abs_local_file_path, row['RS'])  # <h1>Created</h1>
+
+                        osstat = os.stat(abs_local_file_path)
+                        size_ts = osstat.st_size + osstat.st_mtime
+                        update_sha_and_revision_for_row(requests_session, config.files_table, rel_file_name, new_local_sha1, config, size_ts)
+                        reGETsʔ(config, rel_file_name)
+                        put_count += 1
+                        update_instruction_in_table(config.files_table, None, rel_file_name)
+                except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
+                    # Let another cycle get back to the and the GET to win.
+                    not_actually_changed += 1
+                    possible_clash_encountered = True
+                    update_instruction_in_table(config.files_table, None, rel_file_name)
+                except NotPUTtingAsFileStillBeingWrittenTo as e:
+                    not_actually_changed += 1
+                    update_instruction_in_table(config.files_table, None, rel_file_name)
+                except NotPUTtingAsTheServerObjected as e:
+                    not_actually_changed += 1
+                    if "txn-current-lock': Permission denied" in e.message:
+                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                    else:
+                        print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
+                if put_count == 100:
+                    more_to_do = True
+                    batch += 1
+                    break
+        finally:
+
+            not_actually_changed_blurb = ""
+            if not_actually_changed > 0:
+                not_actually_changed_blurb = "(" + str(not_actually_changed) + " not actually changed; from " + str(num_rows) + " total), "
+
+            if put_count > 0:
+                speed = "taking " + english_duration(round((time.time() - start)/put_count, 2)) + " each"
+            else:
+                speed = ""
+
+            dirs_made_blurb = ""
+            if dirs_made > 0:
+                dirs_made_blurb = "(including " + str(dirs_made) + " MKCOLs to facilitate those PUTs)"
+
+            section_end(num_rows > 0 or put_count > 0,  "Batch " + str(batch) + " of"
+                 + ": PUTs on Subversion server took %s, " + str(put_count)
+                 + " PUT files, " + not_actually_changed_blurb
+                 + speed + dirs_made_blurb + "." + stack_trace(), start)
+
+    return possible_clash_encountered
+
+
+def GET(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session):
+    (rev, sha1, svn_baseline_rel_path_not_used) \
+        = svn_details(config, requests_session, file_name)
+    get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
+    # debug(absolute_local_root_path + file_name + ": GET " + str(get.status_code) + " " + str(rev))
+    # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
+    # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
+    if os.path.exists(abs_local_file_path):
+        local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+        if local_sha1 != old_sha1_should_be:
+            clash_file_name = abs_local_file_path + ".clash_" + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+            os.rename(abs_local_file_path, clash_file_name)
+    with open(abs_local_file_path, 'wb') as f:
+        for chunk in get.iter_content(chunk_size=500000000):
+            if chunk:
+                f.write(chunk)
+    sha1 = calculate_sha1_from_local_file(abs_local_file_path)
+    try:
+        osstat = os.stat(abs_local_file_path)
+        size_ts = osstat.st_size + osstat.st_mtime
+    except FileNotFoundError:
+        size_ts = 0 # test_a_deleted_file_syncs_back stimulates this
+    update_row_shas_size_and_timestamp(config.files_table, file_name, sha1, size_ts)
+    update_row_revision(config.files_table, file_name, rev)
+
+
+def GETs(config, requests_session):
+
+    more_to_do = True
+    batch = 0
+
+    GETs_for_later = []
+    gets_list = []
+
+    # Batches of 100 so that here's intermediate reporting.
+    while more_to_do:
+        batch += 1
+        more_to_do = False
+        start = time.time()
+        num_rows = 0
+        file_count = 0
+
+        try:
+            rows = config.files_table.search(Query().I == GET_FROM_SERVER)
+            num_rows = len(rows)
+            for row in rows:
+                file_name = row['FN']
+                is_file = row['T'] == 'F'
+                old_sha1_should_be = row['LS']
+                curr_rev = row['RV']
+                abs_local_file_path = config.args.absolute_local_root_path + file_name
+                head = requests_session.head(config.args.svn_url + esc(file_name))
+                if not is_file or ("Location" in head.headers and head.headers["Location"].endswith("/")):
+                    GETs_for_later.append((file_name, curr_rev))
+                else:
+                    GET(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
+                    file_count += 1
+                    gets_list.append(file_name)
+                update_instruction_in_table(config.files_table, None, file_name)
+                reGETsʔ(config, file_name)
+
+        finally:
+
+            files_str = str(file_count) + " files (" + ", ".join(gets_list) + ")" if file_count > 0 else ""
+            dirs_str = str(num_rows - file_count) + " dirs" if (num_rows - file_count) > 0 else ""
+            if len(files_str) > 0 and len(dirs_str) > 0:
+                files_str += ", "
+            section_end(num_rows > 0,  "Batch " + str(batch) + " of"
+                     + ": GETs from Svn took %s: " + files_str + dirs_str
+                     + ", at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec." + stack_trace(), start)
+
+    return GETs_for_later
+
+
 def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queue, requests_session):
     (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = \
         svn_details(config, requests_session, "")  # root
@@ -1308,7 +1309,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 possible_clash_encountered = PUTs(config, requests_session)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                svn_DELETEs(config, requests_session)
+                DELETEs(config, requests_session)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:

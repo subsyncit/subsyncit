@@ -1011,14 +1011,14 @@ def parentGETʔ(config, file_name):
             update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
 
 
-def GETsʔ(GETs_for_later, excluded_filename_patterns, config, requests_session):
+def svn_changesʔ(dir_list, excluded_filename_patterns, config, requests_session):
 
     get_file_count = get_dir_count = make_dir_count = local_deletes = 0
     start = time.time()
     directories = []
 
     try:
-        for (directory, curr_local_rev) in GETs_for_later:
+        for (directory, curr_local_rev) in dir_list:
             actioned = False
             abs_local_file_path = config.args.absolute_local_root_path + directory
             if not os.path.exists(abs_local_file_path):
@@ -1294,7 +1294,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 dir_GETs_todo = GETs(config, requests_session)
                 # print ("instrs_for_dir_GETs 1" + str(len(dir_GETs_todo)))
-                GETsʔ(dir_GETs_todo, excluded_filename_patterns, config, requests_session)
+                svn_changesʔ(dir_GETs_todo, excluded_filename_patterns, config, requests_session)
 
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 local_deletes(config)
@@ -1306,7 +1306,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
                     # print("instrs_for_dir_GETs 2 1")
-                    GETsʔ([('', state.last_root_revision)], excluded_filename_patterns, config, requests_session)
+                    svn_changesʔ([('', state.last_root_revision)], excluded_filename_patterns, config, requests_session)
                     state.last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
         except requests.packages.urllib3.exceptions.NewConnectionError as e:

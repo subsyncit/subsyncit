@@ -365,12 +365,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
              """[SECTION] File system scan for extra PUTs: 1 missed adds and 0 missed changes (added/changed while Subsyncit was not running) took M ms.
                 [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
                 -- orig sync'd from one to two --
-                [SECTION] Instructions created: 1 local deletes (children of '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Instructions created: 1 local deletes (children of '') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Performing 1 local deletes took M ms. stack: main:loop:local_deletes             
             """), self.simplify_output(self.process_output_one))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 1 file GETs (children of '') took M ms. stack: main:loop:GETsʔ
+             """[SECTION] Instructions created: 1 file GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
                 -- orig sync'd from one to two --
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (testfile), at F files/sec. stack: main:loop:GETs
                 [SECTION] : 1 extra DELETEs (deleted locally while Subsyncit was not running) took M ms.
@@ -774,9 +774,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         output = self.simplify_output(self.process_output_one)
         print(output)
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:GETsʔ
+             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Actual mkdirs: 3; Instructions created: 1 file GETs (children of 'fred, barney, wilma') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Actual mkdirs: 3; Instructions created: 1 file GETs (children of 'fred, barney, wilma') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (wilma/bambam), at F files/sec. stack: main:loop:GETs
             """), output)
 
@@ -831,13 +831,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:GETsʔ
+             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Actual mkdirs: 3; (children of 'fred, barney, wilma') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Actual mkdirs: 3; (children of 'fred, barney, wilma') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
-                [SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 1 file GETs (children of 'wilma') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Instructions created: 1 file GETs (children of 'wilma') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 1 dirs, at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 
@@ -895,13 +895,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 2 dir GETs (children of '') took M ms. stack: main:loop:GETsʔ
+             """[SECTION] Instructions created: 2 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 2 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Actual mkdirs: 2; Instructions created: 4 dir GETs (children of 'a, b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Actual mkdirs: 2; Instructions created: 4 dir GETs (children of 'a, b') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 4 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Actual mkdirs: 4; Instructions created: 8 dir GETs (children of 'a/a, a/b, b/a, b/b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Actual mkdirs: 4; Instructions created: 8 dir GETs (children of 'a/a, a/b, b/a, b/b') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 8 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Actual mkdirs: 8; Instructions created: 1 file GETs (children of 'a/a/a, a/a/b, a/b/a, a/b/b, b/a/a, b/a/b, b/b/a, b/b/b') took M ms. stack: main:loop:GETsʔ
+                [SECTION] Actual mkdirs: 8; Instructions created: 1 file GETs (children of 'a/a/a, a/a/b, a/b/a, a/b/b, b/a/a, b/a/b, b/b/a, b/b/b') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (a/a/b/txt), at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 

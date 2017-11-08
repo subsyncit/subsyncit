@@ -757,9 +757,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         print(output)
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 3 dir GETs (re dirs/files '') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Actual mkdirs: 3; Instructions created: 1 file GETs (re dirs/files 'fred, barney, wilma') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (wilma/bambam), at F files/sec. stack: main:loop:GETs
             """), output)
 
 
@@ -814,14 +814,14 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 3 dir GETs (re dirs/files '') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Actual mkdirs: 3; (re dirs/files 'fred, barney, wilma') took M ms. stack: main:loop:GETsʔ
                 [SECTION] Batch 1 of: PUTs on Subversion server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
                 [SECTION] Instructions created: 3 dir GETs (re dirs/files '') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 3 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Instructions created: 1 file GETs (re dirs/files 'wilma') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 1 directories, at F files/sec. stack: main:loop:GETs
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 1 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 dirs, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 dirs, at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 
 
@@ -879,13 +879,13 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 2 dir GETs (re dirs/files '') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 2 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 2 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Actual mkdirs: 2; Instructions created: 4 dir GETs (re dirs/files 'a, b') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 4 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 4 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Actual mkdirs: 4; Instructions created: 8 dir GETs (re dirs/files 'a/a, a/b, b/a, b/b') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 0 files, and 8 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 8 dirs, at F files/sec. stack: main:loop:GETs
                 [SECTION] Actual mkdirs: 8; Instructions created: 1 file GETs (re dirs/files 'a/a/a, a/a/b, a/b/a, a/b/b, b/a/a, b/a/b, b/b/a, b/b/b') took M ms. stack: main:loop:GETsʔ
-                [SECTION] Batch 1 of: GETs from Subversion server took M ms: 1 files, and 0 directories, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GETs from Svn took M ms: 1 files (a/a/b/txt), at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 
 

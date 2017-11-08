@@ -663,6 +663,7 @@ def GETs(config, requests_session):
     batch = 0
 
     GETs_for_later = []
+    gets_list = []
 
     # Batches of 100 so that here's intermediate reporting.
     while more_to_do:
@@ -687,15 +688,19 @@ def GETs(config, requests_session):
                 else:
                     GET(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
                     file_count += 1
+                    gets_list.append(file_name)
                 update_instruction_in_table(config.files_table, None, file_name)
                 reGETsʔ(config, file_name)
 
         finally:
 
+            files_str = str(file_count) + " files (" + ", ".join(gets_list) + ")" if file_count > 0 else ""
+            dirs_str = str(num_rows - file_count) + " dirs" if (num_rows - file_count) > 0 else ""
+            if len(files_str) > 0 and len(dirs_str) > 0:
+                files_str += ", "
             section_end(num_rows > 0,  "Batch " + str(batch) + " of"
-                     + ": GETs from Subversion server took %s: " + str(file_count)
-                     + " files, and " + str(num_rows - file_count)
-                     + " directories, at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec." + stack_trace(), start)
+                     + ": GETs from Svn took %s: " + files_str + dirs_str
+                     + ", at " + str(round(file_count / (time.time() - start) , 2)) + " files/sec." + stack_trace(), start)
 
     return GETs_for_later
 

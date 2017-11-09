@@ -1029,7 +1029,7 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
                 update_row_revision(state.files_table, directory, curr_rmt_rev)
                 parentGETʔ(state, directory)
 
-                dir_list = svn_dir_list(config, requests_session, esc(directory))
+                children = svn_dir_list(config, requests_session, esc(directory))
                 unprocessed_files = {}
                 Row = Query()
                 rows = state.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
@@ -1042,7 +1042,7 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
                             "RS": row['RS']
                         }
 
-                for fn, rev, sha1 in dir_list:
+                for fn, rev, sha1 in children:
                     match = None
                     if fn in unprocessed_files:
                         match = unprocessed_files[fn]

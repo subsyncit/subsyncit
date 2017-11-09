@@ -559,22 +559,22 @@ def esc(name):
     return name.replace("?", "%3F").replace("&", "%26")
 
 
-def make_directories_if_missing_in_db(config, dname, requests_session):
+def make_directories_if_missing_in_db(config, state, dname, requests_session):
 
     dirs_made = 0
     if dname == "":
         return 0
-    dir = config.files_table.get(Query().FN == dname)
+    dir = state.files_table.get(Query().FN == dname)
 
     if not dir or dir['RV'] == 0:
         parentname = dirname(dname)
         if parentname != "":
-            parent = config.files_table.get(Query().FN == parentname)
+            parent = state.files_table.get(Query().FN == parentname)
             if not parent or parent['RV'] == 0:
-                dirs_made += make_directories_if_missing_in_db(config, parentname, requests_session)
+                dirs_made += make_directories_if_missing_in_db(config, state, parentname, requests_session)
 
     if not dir:
-        make_directories_if_missing_in_db(config, dirname(dname), requests_session)
+        make_directories_if_missing_in_db(config, state, dirname(dname), requests_session)
         dirs_made += 1
         print ("x TYPE: " + dname)
         dir = {'FN': dname,
@@ -586,10 +586,10 @@ def make_directories_if_missing_in_db(config, dname, requests_session):
                'I': None,
                'RV': MKCOL(requests_session, dname, config)
                }
-        config.files_table.insert(dir)
+        state.files_table.insert(dir)
     elif dir['RV'] == 0:
         dirs_made += 1
-        config.files_table.update(
+        state.files_table.update(
             {
                 'I': None,
                 'RV': MKCOL(requests_session, dname, config)
@@ -624,11 +624,11 @@ def extract_name_type_rev(entry_xml_element):
     return file_or_dir, file_name, rev
 
 
-def local_deletes(config):
+def local_deletes(config, state):
 
     start = time.time()
 
-    rows = config.files_table.search(Query().I == DELETE_LOCALLY)
+    rows = state.files_table.search(Query().I == DELETE_LOCALLY)
 
     deletes = 0
     try:
@@ -638,8 +638,8 @@ def local_deletes(config):
             try:
                 os.remove(name)
                 deletes += 1
-                config.files_table.remove(Query().FN == file_name)
-                parentGETʔ(config, dirname(file_name))
+                state.files_table.remove(Query().FN == file_name)
+                parentGETʔ(state, dirname(file_name))
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
@@ -742,7 +742,7 @@ def extract_path_from_baseline_rel_path(config, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def update_sha_and_revision_for_row(config, requests_session, file_name, local_sha1, size_ts):
+def update_sha_and_revision_for_row(config, state, requests_session, file_name, local_sha1, size_ts):
     elements_for = svn_dir_list(config, requests_session, file_name)
     i = len(elements_for)
     if i != 1:
@@ -750,7 +750,7 @@ def update_sha_and_revision_for_row(config, requests_session, file_name, local_s
     for not_used_this_time, remote_rev_num, remote_sha1 in elements_for:
         if local_sha1 != remote_sha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser()
-        config.files_table.update({
+        state.files_table.update({
             'RV': remote_rev_num,
             'RS': remote_sha1,
             'LS': remote_sha1,
@@ -815,7 +815,7 @@ def write_error(db_dir, msg):
     make_hidden_on_windows_too(subsyncit_err)
 
 
-def transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue):
+def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue):
 
     start = time.time()
 
@@ -823,20 +823,20 @@ def transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes
     while len(local_adds_chgs_deletes_queue) > 0:
         (file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add_dir":
-            upsert_row_in_table(config.files_table, file_name, 0, "dir", instruction=MAKE_DIR_ON_SERVER)
+            upsert_row_in_table(state.files_table, file_name, 0, "dir", instruction=MAKE_DIR_ON_SERVER)
         elif action == "add_file":
-            in_subversion = file_is_in_subversion(config.files_table, file_name)
+            in_subversion = file_is_in_subversion(state.files_table, file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
                 # print("File to add: " + file_name + " is not in subversion")
-                upsert_row_in_table(config.files_table, file_name, 0, "file", instruction=PUT_ON_SERVER)
+                upsert_row_in_table(state.files_table, file_name, 0, "file", instruction=PUT_ON_SERVER)
         elif action == "change":
-            update_instruction_in_table(config.files_table, PUT_ON_SERVER, file_name)
+            update_instruction_in_table(state.files_table, PUT_ON_SERVER, file_name)
         elif action == "delete":
-            in_subversion = file_is_in_subversion(config.files_table, file_name)
+            in_subversion = file_is_in_subversion(state.files_table, file_name)
             # 'svn up' can delete a file, causing watchdog to trigger a delete notification .. to be ignored
             if in_subversion:
-                update_instruction_in_table(config.files_table, DELETE_ON_SERVER, file_name)
+                update_instruction_in_table(state.files_table, DELETE_ON_SERVER, file_name)
         else:
             raise Exception("Unknown action " + action)
 
@@ -885,17 +885,17 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
         if excluded_filename_patterns.should_be_excluded(file_name):
             continue
 
-        row = config.files_table.get(Query().FN == file_name)
+        row = state.files_table.get(Query().FN == file_name)
         in_subversion = row and row['RS'] != None
         if row and row['I'] != None:
             continue
         if not in_subversion:
-            upsert_row_in_table(config.files_table, file_name, 0, 'F', PUT_ON_SERVER)
+            upsert_row_in_table(state.files_table, file_name, 0, 'F', PUT_ON_SERVER)
             to_add += 1
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
             if size_ts != row["ST"]:
-                update_instruction_in_table(config.files_table, PUT_ON_SERVER, file_name)
+                update_instruction_in_table(state.files_table, PUT_ON_SERVER, file_name)
                 to_change += 1
 
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
@@ -909,7 +909,7 @@ def scan_for_any_missed_deletes(config, state):
     to_delete = 0
 
     file = Query()
-    for row in config.files_table.search((file.I == None) & (file.RS != None)):
+    for row in state.files_table.search((file.I == None) & (file.RS != None)):
         if state.is_shutting_down:
             break
         if to_delete > 100:
@@ -917,7 +917,7 @@ def scan_for_any_missed_deletes(config, state):
 
         file_name = row['FN']
         if not os.path.exists(config.args.absolute_local_root_path + file_name) and row['I'] == None:
-            update_instruction_in_table(config.files_table, DELETE_ON_SERVER, file_name)
+            update_instruction_in_table(state.files_table, DELETE_ON_SERVER, file_name)
             to_delete += 1
 
     section_end(to_delete > 0,  ": " + str(to_delete)
@@ -962,11 +962,11 @@ def make_hidden_on_windows_too(path):
         ctypes.windll.kernel32.SetFileAttributesW(path, FILE_ATTRIBUTE_HIDDEN)
 
 
-def DELETEs(config, requests_session):
+def DELETEs(config, state, requests_session):
 
     start = time.time()
 
-    rows = config.files_table.search(Query().I == DELETE_ON_SERVER)
+    rows = state.files_table.search(Query().I == DELETE_ON_SERVER)
 
     parent_gets = {}
 
@@ -982,16 +982,16 @@ def DELETEs(config, requests_session):
             exit(10)
         if row['T'] == 'F':
             files_deleted += 1
-            config.files_table.remove(Query().FN == row['FN'])
+            state.files_table.remove(Query().FN == row['FN'])
         else:
             directories_deleted += 1
-            config.files_table.remove(Query().FN == row['FN'])
+            state.files_table.remove(Query().FN == row['FN'])
             # TODO LIKE
 
         parent_gets[dirname(fn)] = True
 
     for parent in parent_gets.items():
-        parentGETʔ(config, parent[0])
+        parentGETʔ(state, parent[0])
 
     speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE." if len(rows) > 0 else "."
 
@@ -1008,15 +1008,14 @@ def MKCOL(requests_session, dir, config):
     raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
 
 
-def parentGETʔ(config, parent):
-    # print("parent  -- " + parent)
+def parentGETʔ(state, parent):
     if parent and parent != "":
-        parent_row = config.files_table.get(Query().FN == parent)
+        parent_row = state.files_table.get(Query().FN == parent)
         if parent_row and parent_row['I'] == None:
-            update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
+            update_instruction_in_table(state.files_table, GET_FROM_SERVER, parent)
 
 
-def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session):
+def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_session):
 
     get_file_count = get_dir_count = make_dir_count = local_deletes = 0
     start = time.time()
@@ -1025,20 +1024,15 @@ def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session
     try:
         for (directory, curr_local_rev) in dir_list:
             actioned = False
-            abs_local_file_path = config.args.absolute_local_root_path + directory
             curr_rmt_rev = requests_session.svn_revision(config, directory)
             if curr_local_rev != curr_rmt_rev:
-                update_row_revision(config.files_table, directory, curr_rmt_rev)
-                parentGETʔ(config, directory)
+                update_row_revision(state.files_table, directory, curr_rmt_rev)
+                parentGETʔ(state, directory)
 
                 dir_list = svn_dir_list(config, requests_session, esc(directory))
-
                 unprocessed_files = {}
-
                 Row = Query()
-
-                rows = config.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
-                # print ("query dc:", directory.count(os.sep), "d:", directory, "ct:", len(rows), stack_trace())
+                rows = state.files_table.search((Row.I == None) & (Row.L <= directory.count(os.sep)) & (Row.FN.test(lambda s: s.startswith(directory))))
                 for row in rows:
                     fn = row['FN']
                     if not excluded_filename_patterns.should_be_excluded(fn):
@@ -1048,10 +1042,6 @@ def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session
                             "RS": row['RS']
                         }
 
-                files = []
-                # for fn, rev, sha1 in dir_list:
-                #     files.append(fn)
-                # print("unprocessed_files:", len(unprocessed_files), "dirlist:", ",".join(files))
                 for fn, rev, sha1 in dir_list:
                     match = None
                     if fn in unprocessed_files:
@@ -1065,27 +1055,25 @@ def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session
                         if match["I"] != None:
                             continue
                         if not match['RS'] == sha1:
-                            update_instruction_in_table(config.files_table, GET_FROM_SERVER, fn)
+                            update_instruction_in_table(state.files_table, GET_FROM_SERVER, fn)
                             actioned = True
                             if match['T'] == 'F':
                                 get_file_count += 1
                             else:
-                                # print("dirCount1 " + fn)
                                 get_dir_count += 1
                     else:
                         f = "D" if sha1 is None else "F"
-                        upsert_row_in_table(config.files_table, fn, 0, f, instruction=GET_FROM_SERVER)
+                        upsert_row_in_table(state.files_table, fn, 0, f, instruction=GET_FROM_SERVER)
                         actioned = True
                         if sha1:
                             get_file_count += 1
                         else:
-                            # print("dirCount2 " + fn + " " + f)
                             get_dir_count += 1
 
                 # files still in the unprocessed_files list are not up on Subversion
                 for fn, val in unprocessed_files.items():
                     local_deletes += 1
-                    update_instruction_in_table(config.files_table, DELETE_LOCALLY, fn)
+                    update_instruction_in_table(state.files_table, DELETE_LOCALLY, fn)
                 if actioned:
                     directories.append(directory)
     finally:
@@ -1099,7 +1087,7 @@ def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session
         section_end(make_dir_count > 0 or get_file_count > 0 or get_dir_count > 0 or local_deletes > 0, msg, start)
 
 
-def PUT(config, requests_session, abs_local_file_path, alleged_remote_sha1):
+def PUT(config, state, requests_session, abs_local_file_path, alleged_remote_sha1):
     dirs_made = 0
     s1 = os.path.getsize(abs_local_file_path)
     time.sleep(0.1)
@@ -1108,7 +1096,7 @@ def PUT(config, requests_session, abs_local_file_path, alleged_remote_sha1):
         raise NotPUTtingAsFileStillBeingWrittenTo(abs_local_file_path)
     file_name = get_file_name(config, abs_local_file_path)
 
-    dirs_made += make_directories_if_missing_in_db(config, dirname(file_name), requests_session)
+    dirs_made += make_directories_if_missing_in_db(config, state, dirname(file_name), requests_session)
 
     if alleged_remote_sha1:
         (ver, actual_remote_sha1, not_used_here) = svn_details(config, requests_session, file_name)
@@ -1124,7 +1112,7 @@ def PUT(config, requests_session, abs_local_file_path, alleged_remote_sha1):
     return dirs_made
 
 
-def PUTs(config, requests_session):
+def PUTs(config, state, requests_session):
 
     possible_clash_encountered = False
     more_to_do = True
@@ -1137,17 +1125,13 @@ def PUTs(config, requests_session):
         start = time.time()
         num_rows = put_count = dirs_made = not_actually_changed = 0
         try:
-            rows = config.files_table.search(Query().I == PUT_ON_SERVER)
+            rows = state.files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
             for row in rows:
                 file_name = row['FN']
                 try:
                     abs_local_file_path = (config.args.absolute_local_root_path + file_name)
                     new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
-                    output = ""
-                    # print("-new_local_sha1=" + new_local_sha1)
-                    # print("-row['RS']=" + str(row['RS']))
-                    # print("-row['LS']=" + str(row['LS']))
                     if new_local_sha1 == 'FILE_MISSING' or (row['RS'] == row['LS'] and row['LS'] == new_local_sha1):
                         pass
                         # files that come down as new/changed, get written to the FS trigger a file added/changed message,
@@ -1155,24 +1139,24 @@ def PUTs(config, requests_session):
                         # don't do it.
 
                         num_rows = num_rows -1
-                        update_instruction_in_table(config.files_table, None, file_name)
+                        update_instruction_in_table(state.files_table, None, file_name)
                     else:
-                        dirs_made += PUT(config, requests_session, abs_local_file_path, row['RS'])  # <h1>Created</h1>
+                        dirs_made += PUT(config, state, requests_session, abs_local_file_path, row['RS'])  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(config, requests_session, file_name, new_local_sha1, size_ts)
-                        parentGETʔ(config, file_name)
+                        update_sha_and_revision_for_row(config, state, requests_session, file_name, new_local_sha1, size_ts)
+                        parentGETʔ(state, file_name)
                         put_count += 1
-                        update_instruction_in_table(config.files_table, None, file_name)
+                        update_instruction_in_table(state.files_table, None, file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
                     # Let another cycle get back to the and the GET to win.
                     not_actually_changed += 1
                     possible_clash_encountered = True
-                    update_instruction_in_table(config.files_table, None, file_name)
+                    update_instruction_in_table(state.files_table, None, file_name)
                 except NotPUTtingAsFileStillBeingWrittenTo as e:
                     not_actually_changed += 1
-                    update_instruction_in_table(config.files_table, None, file_name)
+                    update_instruction_in_table(state.files_table, None, file_name)
                 except NotPUTtingAsTheServerObjected as e:
                     not_actually_changed += 1
                     if "txn-current-lock': Permission denied" in e.message:
@@ -1206,11 +1190,10 @@ def PUTs(config, requests_session):
     return possible_clash_encountered
 
 
-def GET_file(config, abs_local_file_path, old_sha1_should_be, file_name, requests_session):
+def GET_file(config, state, abs_local_file_path, old_sha1_should_be, file_name, requests_session):
     (rev, sha1, svn_baseline_rel_path_not_used) \
         = svn_details(config, requests_session, file_name)
     get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
-    # debug(absolute_local_root_path + file_name + ": GET " + str(get.status_code) + " " + str(rev))
     # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
     # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
     if os.path.exists(abs_local_file_path):
@@ -1228,28 +1211,28 @@ def GET_file(config, abs_local_file_path, old_sha1_should_be, file_name, request
         size_ts = osstat.st_size + osstat.st_mtime
     except FileNotFoundError:
         size_ts = 0 # test_a_deleted_file_syncs_back stimulates this
-    update_row_shas_size_and_timestamp(config.files_table, file_name, sha1, size_ts)
-    update_row_revision(config.files_table, file_name, rev)
+    update_row_shas_size_and_timestamp(state.files_table, file_name, sha1, size_ts)
+    update_row_revision(state.files_table, file_name, rev)
 
 
-def GET(config, curr_rev, file_name, get_children, gets_list, is_file, old_sha1_should_be, requests_session):
+def GET(config, state, curr_rev, file_name, get_children, gets_list, is_file, old_sha1_should_be, requests_session):
     file_count = 0
     abs_local_file_path = config.args.absolute_local_root_path + file_name
     if is_file:
-        GET_file(config, abs_local_file_path, old_sha1_should_be, file_name, requests_session)
+        GET_file(config, state, abs_local_file_path, old_sha1_should_be, file_name, requests_session)
         file_count += 1
         gets_list.append(file_name)
     else:
         if not os.path.exists(abs_local_file_path):
             os.makedirs(abs_local_file_path)
         get_children.append((file_name, curr_rev))
-    update_instruction_in_table(config.files_table, None, file_name)
+    update_instruction_in_table(state.files_table, None, file_name)
     if file_count > 0:
-        parentGETʔ(config, dirname(file_name))
+        parentGETʔ(state, dirname(file_name))
     return file_count
 
 
-def GETs(config, requests_session):
+def GETs(config, state, requests_session):
 
     more_to_do = True
     batch = 0
@@ -1264,10 +1247,10 @@ def GETs(config, requests_session):
         start = time.time()
         num_rows = file_count = 0
         try:
-            rows = config.files_table.search(Query().I == GET_FROM_SERVER)
+            rows = state.files_table.search(Query().I == GET_FROM_SERVER)
             num_rows = len(rows)
             for row in rows:
-                file_count += GET(config, row['RV'], row['FN'], get_children, gets_list, row['T'] == 'F', row['LS'], requests_session)
+                file_count += GET(config, state, row['RV'], row['FN'], get_children, gets_list, row['T'] == 'F', row['LS'], requests_session)
 
         finally:
 
@@ -1304,22 +1287,22 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                     state.last_scanned = scan_start_time
 
                 # Act on existing instructions (if any)
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                dir_GETs_todo = GETs(config, requests_session)
-                svn_changesʔ(config, dir_GETs_todo, excluded_filename_patterns, requests_session)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
+                dir_GETs_todo = GETs(config, state, requests_session)
+                svn_changesʔ(config, state, dir_GETs_todo, excluded_filename_patterns, requests_session)
 
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                local_deletes(config)
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                possible_clash_encountered = PUTs(config, requests_session)
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
-                DELETEs(config, requests_session)
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
+                local_deletes(config, state)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
+                possible_clash_encountered = PUTs(config, state, requests_session)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
+                DELETEs(config, state, requests_session)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
-                    svn_changesʔ(config, [('', state.last_root_revision)], excluded_filename_patterns, requests_session)
+                    svn_changesʔ(config, state, [('', state.last_root_revision)], excluded_filename_patterns, requests_session)
                     state.last_root_revision = root_revision_on_remote_svn_repo
-                transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+                transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
         except requests.packages.urllib3.exceptions.NewConnectionError as e:
             write_error(config.db_dir, "NewConnectionError: " + repr(e))
         except requests.exceptions.ConnectionError as e:
@@ -1395,8 +1378,10 @@ def main(argv):
     if not os.path.exists(config.db_dir):
         os.mkdir(config.db_dir)
 
+    state = State(config.db_dir)
+
     db = TinyDB(config.db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
-    config.files_table  = MyTinyDBTrace(db.table('files'))
+    state.files_table  = MyTinyDBTrace(db.table('files'))
 
     with open(config.db_dir + os.sep + "INFO.TXT", "w") as text_file:
         text_file.write(config.args.absolute_local_root_path + "is the Subsyncit path that this pertains to")
@@ -1415,8 +1400,6 @@ def main(argv):
             pass
 
     excluded_filename_patterns = ExcludedPatternNames()
-
-    state = State(config.db_dir)
 
     file_system_watcher = NUllObject()
     if config.args.do_fs_event_listener:
@@ -1456,7 +1439,7 @@ def main(argv):
     except KeyboardInterrupt:
         print("CTRL-C, Shutting down...")
 
-    transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
+    transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_deletes_queue)
 
     try:
         file_system_watcher.stop()
@@ -1472,7 +1455,7 @@ def main(argv):
     debug = False
 
     if debug:
-        print_rows(config.files_table)
+        print_rows(state.files_table)
 
 if __name__ == "__main__":
 

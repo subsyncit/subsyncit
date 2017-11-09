@@ -490,7 +490,7 @@ class ExcludedPatternNames(object):
 
 class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
-    def __init__(self, local_adds_chgs_deletes_queue, config, file_system_watcher, state, excluded_patterns):
+    def __init__(self, config, state, local_adds_chgs_deletes_queue, file_system_watcher, excluded_patterns):
         super(FileSystemNotificationHandler, self).__init__(ignore_patterns=["*/.*"])
         self.state = state
         self.local_adds_chgs_deletes_queue = local_adds_chgs_deletes_queue
@@ -742,7 +742,7 @@ def extract_path_from_baseline_rel_path(config, line):
     return path.replace("/", os.sep).replace("\\", os.sep).replace(os.sep+os.sep, os.sep)
 
 
-def update_sha_and_revision_for_row(requests_session, files_table, file_name, local_sha1, config, size_ts):
+def update_sha_and_revision_for_row(config, requests_session, file_name, local_sha1, size_ts):
     elements_for = svn_dir_list(config, requests_session, file_name)
     i = len(elements_for)
     if i != 1:
@@ -750,7 +750,7 @@ def update_sha_and_revision_for_row(requests_session, files_table, file_name, lo
     for not_used_this_time, remote_rev_num, remote_sha1 in elements_for:
         if local_sha1 != remote_sha1:
             raise NotPUTtingAsItWasChangedOnTheServerByAnotherUser()
-        files_table.update({
+        config.files_table.update({
             'RV': remote_rev_num,
             'RS': remote_sha1,
             'LS': remote_sha1,
@@ -798,7 +798,7 @@ def svn_details(config, requests_session, file_name):
     return (ver, sha1, svn_baseline_rel_path)
 
 
-def get_svn_repo_parent_path(requests_session, config):
+def get_svn_repo_parent_path(config, requests_session):
     url = config.args.svn_url
     if url.endswith("/"):
         url = url[:-1]
@@ -1016,7 +1016,7 @@ def parentGETʔ(config, parent):
             update_instruction_in_table(config.files_table, GET_FROM_SERVER, parent)
 
 
-def svn_changesʔ(dir_list, excluded_filename_patterns, config, requests_session):
+def svn_changesʔ(config, dir_list, excluded_filename_patterns, requests_session):
 
     get_file_count = get_dir_count = make_dir_count = local_deletes = 0
     start = time.time()
@@ -1161,7 +1161,7 @@ def PUTs(config, requests_session):
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(requests_session, config.files_table, rel_file_name, new_local_sha1, config, size_ts)
+                        update_sha_and_revision_for_row(config, requests_session, rel_file_name, new_local_sha1, size_ts)
                         parentGETʔ(config, rel_file_name)
                         put_count += 1
                         update_instruction_in_table(config.files_table, None, rel_file_name)
@@ -1206,7 +1206,7 @@ def PUTs(config, requests_session):
     return possible_clash_encountered
 
 
-def GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session):
+def GET_file(config, abs_local_file_path, old_sha1_should_be, file_name, requests_session):
     (rev, sha1, svn_baseline_rel_path_not_used) \
         = svn_details(config, requests_session, file_name)
     get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
@@ -1236,7 +1236,7 @@ def GET(config, curr_rev, file_name, get_children, gets_list, is_file, old_sha1_
     file_count = 0
     abs_local_file_path = config.args.absolute_local_root_path + file_name
     if is_file:
-        GET_file(abs_local_file_path, config, old_sha1_should_be, file_name, requests_session)
+        GET_file(config, abs_local_file_path, old_sha1_should_be, file_name, requests_session)
         file_count += 1
         gets_list.append(file_name)
     else:
@@ -1291,7 +1291,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
         try:
             state.online = True
             if not config.svn_repo_parent_path:
-                config.svn_repo_parent_path = get_svn_repo_parent_path(requests_session, config)
+                config.svn_repo_parent_path = get_svn_repo_parent_path(config, requests_session)
 
             if root_revision_on_remote_svn_repo != None:
                 if state.iteration == 0:  # At boot time only for now
@@ -1306,7 +1306,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 # Act on existing instructions (if any)
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 dir_GETs_todo = GETs(config, requests_session)
-                svn_changesʔ(dir_GETs_todo, excluded_filename_patterns, config, requests_session)
+                svn_changesʔ(config, dir_GETs_todo, excluded_filename_patterns, requests_session)
 
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 local_deletes(config)
@@ -1317,7 +1317,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
                 # Actions indicated by Subversion server next, only if root revision is different
                 if root_revision_on_remote_svn_repo != state.last_root_revision or possible_clash_encountered:
-                    svn_changesʔ([('', state.last_root_revision)], excluded_filename_patterns, config, requests_session)
+                    svn_changesʔ(config, [('', state.last_root_revision)], excluded_filename_patterns, requests_session)
                     state.last_root_revision = root_revision_on_remote_svn_repo
                 transform_enqueued_actions_into_instructions(config, local_adds_chgs_deletes_queue)
         except requests.packages.urllib3.exceptions.NewConnectionError as e:
@@ -1403,8 +1403,6 @@ def main(argv):
 
     local_adds_chgs_deletes_queue = IndexedSet()
 
-    file_system_watcher = None
-
     class NUllObject(object):
 
         def is_alive(self):
@@ -1431,8 +1429,8 @@ def main(argv):
         elif sys.platform == "win32":
             from watchdog.observers.read_directory_changes import WindowsApiObserver
             file_system_watcher = WindowsApiObserver
-    
-        notification_handler = FileSystemNotificationHandler(local_adds_chgs_deletes_queue, config, file_system_watcher, state, excluded_filename_patterns)
+
+        notification_handler = FileSystemNotificationHandler(config, state, local_adds_chgs_deletes_queue, file_system_watcher, excluded_filename_patterns)
         file_system_watcher.schedule(notification_handler, config.args.absolute_local_root_path, recursive=True)
         file_system_watcher.daemon = True
         file_system_watcher.start()

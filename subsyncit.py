@@ -1140,9 +1140,9 @@ def PUTs(config, requests_session):
             rows = config.files_table.search(Query().I == PUT_ON_SERVER)
             num_rows = len(rows)
             for row in rows:
-                rel_file_name = row['FN']
+                file_name = row['FN']
                 try:
-                    abs_local_file_path = (config.args.absolute_local_root_path + rel_file_name)
+                    abs_local_file_path = (config.args.absolute_local_root_path + file_name)
                     new_local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
                     output = ""
                     # print("-new_local_sha1=" + new_local_sha1)
@@ -1155,30 +1155,30 @@ def PUTs(config, requests_session):
                         # don't do it.
 
                         num_rows = num_rows -1
-                        update_instruction_in_table(config.files_table, None, rel_file_name)
+                        update_instruction_in_table(config.files_table, None, file_name)
                     else:
                         dirs_made += PUT(config, requests_session, abs_local_file_path, row['RS'])  # <h1>Created</h1>
 
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
-                        update_sha_and_revision_for_row(config, requests_session, rel_file_name, new_local_sha1, size_ts)
-                        parentGETʔ(config, rel_file_name)
+                        update_sha_and_revision_for_row(config, requests_session, file_name, new_local_sha1, size_ts)
+                        parentGETʔ(config, file_name)
                         put_count += 1
-                        update_instruction_in_table(config.files_table, None, rel_file_name)
+                        update_instruction_in_table(config.files_table, None, file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
                     # Let another cycle get back to the and the GET to win.
                     not_actually_changed += 1
                     possible_clash_encountered = True
-                    update_instruction_in_table(config.files_table, None, rel_file_name)
+                    update_instruction_in_table(config.files_table, None, file_name)
                 except NotPUTtingAsFileStillBeingWrittenTo as e:
                     not_actually_changed += 1
-                    update_instruction_in_table(config.files_table, None, rel_file_name)
+                    update_instruction_in_table(config.files_table, None, file_name)
                 except NotPUTtingAsTheServerObjected as e:
                     not_actually_changed += 1
                     if "txn-current-lock': Permission denied" in e.message:
-                        print("User lacks write permissions for " + rel_file_name + ", and that may (I am not sure) be for the whole repo")
+                        print("User lacks write permissions for " + file_name + ", and that may (I am not sure) be for the whole repo")
                     else:
-                        print(("Unexpected on_created output for " + rel_file_name + " = [" + e.message + "]"))
+                        print(("Unexpected on_created output for " + file_name + " = [" + e.message + "]"))
                 if put_count == 100:
                     more_to_do = True
                     batch += 1

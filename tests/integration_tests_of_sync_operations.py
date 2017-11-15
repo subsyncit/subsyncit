@@ -124,8 +124,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.rel_dir_two = "integrationTests/test_" + testNum + "/two/"
         self.test_sync_dir_two = pwd + os.sep + self.rel_dir_two
 
-        self.db_dir_one = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_one.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
-        self.db_dir_two = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_two.replace("/", "%47").replace(":", "%58").replace("\\", "%92") + "/"
+        self.db_dir_one = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_one[:-1].replace("/", "%47").replace(":", "%58").replace("\\", "%92")
+        self.db_dir_two = self.home_dir + os.sep + ".subsyncit" + os.sep + self.test_sync_dir_two[:-1].replace("/", "%47").replace(":", "%58").replace("\\", "%92")
 
         self.reset_test_dir(self.test_sync_dir_one)
         self.reset_test_dir(self.db_dir_one)
@@ -179,7 +179,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_one_and_two()
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_one)
-        self.should_start_with(rows, 0, "01, testfile.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0")
+        self.should_start_with(rows, 0, "01, /testfile.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0")
 
 
     @timedtest
@@ -209,7 +209,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_one_and_two()
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_one)
-        self.should_start_with(rows, 0, "01, testfile.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36")
+        self.should_start_with(rows, 0, "01, /testfile.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36")
 
 
 
@@ -363,16 +363,16 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] File system scan for extra PUTs: 1 missed adds and 0 missed changes (added/changed while Subsyncit was not running) took M ms.
-                [SECTION] Batch 1 of: PUT(s) to Svn server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
+                [SECTION] Batch 1 of: PUT(s) to Svn took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
                 -- orig sync'd from one to two --
-                [SECTION] Instructions created: GETs 1 local deletes (children of '') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Instructions created: GETs 1 local deletes (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Performing 1 local deletes took M ms. stack: main:loop:local_deletes             
             """), self.simplify_output(self.process_output_one))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 1 file GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
+             """[SECTION] Instructions created: 1 file GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 -- orig sync'd from one to two --
-                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (testfile), at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/testfile), at F files/sec. stack: main:loop:GETs
                 [SECTION] : 1 extra DELETEs (deleted locally while Subsyncit was not running) took M ms.
                 [SECTION] DELETEs on Subversion server took M ms, 0 directories and 1 files, S secs per DELETE.
             """), self.simplify_output(self.process_output_two))
@@ -417,6 +417,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_to_appear(file_in_subsyncit_two)
             self.signal_stop_of_subsyncit(self.test_sync_dir_two)
             self.process_two.wait()
+            # time.sleep(10)
             with open(file_in_subsyncit_two, "w") as text_file:
                 text_file.write("Overrite locally in client 2")
             self.start_subsyncit_two()
@@ -563,7 +564,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.process_one = self.start_subsyncit_without_user_and_password("http://localhost:8099/", self.test_sync_dir_one)
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://localhost:8099/ does not have Subversion mounted on that URL")
+            self.wait_for_file_contents_to_contain(self.db_dir_one + os.sep + "subsyncit.err", "http://localhost:8099 does not have Subversion mounted on that URL")
         finally:
             self.end_process_one()
 
@@ -573,8 +574,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one, passwd="sdfsdfget3qgwegsdgsdgsf")
         try:
-            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", "http://127.0.0.1:8099/svn/testrepo/integrationTests/") # start
-            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", " is saying that the user is not authorized") # end
+            self.wait_for_file_contents_to_contain(self.db_dir_one + os.sep + "subsyncit.err", "http://127.0.0.1:8099/svn/testrepo/integrationTests/") # start
+            self.wait_for_file_contents_to_contain(self.db_dir_one + os.sep + "subsyncit.err", " is saying that the user is not authorized") # end
         finally:
             self.end_process_one()
 
@@ -585,7 +586,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.process_one = self.start_subsyncit("https://localhost:34456/", self.test_sync_dir_one, self.process_output_one)
         try:
             time.sleep(2)
-            self.wait_for_file_contents_to_contain(self.db_dir_one + "subsyncit.err", " Failed to establish a new connection")
+            self.wait_for_file_contents_to_contain(self.db_dir_one + os.sep + "subsyncit.err", " Failed to establish a new connection")
         finally:
             self.end_process_one()
 
@@ -766,17 +767,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rows = self.get_db_rows(test_start, self.test_sync_dir_one)
 
-        self.should_start_with(rows, 0, "01, fred, None, None")
-        self.should_start_with(rows, 1, "02, barney, None, None")
-        self.should_start_with(rows, 2, "03, wilma, None, None")
-        self.should_start_with(rows, 3, "03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
+        self.should_start_with(rows, 0, "01, /fred/, None, None")
+        self.should_start_with(rows, 1, "02, /barney/, None, None")
+        self.should_start_with(rows, 2, "03, /wilma/, None, None")
+        self.should_start_with(rows, 3, "03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
 
         output = self.simplify_output(self.process_output_one)
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
+             """[SECTION] Instructions created: 3 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 1 file GETs (children of 'wilma') took M ms. stack: main:loop:svn_changesʔ
-                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (wilma/bambam), at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created: 1 file GETs (children of '/wilma/') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/wilma/bambam), at F files/sec. stack: main:loop:GETs
             """), output)
 
 
@@ -823,20 +824,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         rows = self.get_db_rows(test_start, self.test_sync_dir_one)
 
         self.assertEquals(self.no_leading_spaces(
-             """01, fred, None, None
-                02, barney, None, None
-                03, wilma, None, None
-                03, wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
+             """01, /fred/, None, None
+                02, /barney/, None, None
+                03, /wilma/, None, None
+                03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
             "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
+             """[SECTION] Instructions created: 3 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Batch 1 of: PUT(s) to Svn server took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
-                [SECTION] Instructions created: 3 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
-                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 3 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 1 file GETs (children of 'wilma') took M ms. stack: main:loop:svn_changesʔ
-                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 2 dirs, at F files/sec. stack: main:loop:GETs
+                [SECTION] Batch 1 of: PUT(s) to Svn took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
+                [SECTION] Instructions created: 3 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
             """), self.simplify_output(self.process_output_one))
 
 
@@ -876,31 +874,31 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.process_one.wait()
 
         self.assertEquals(self.no_leading_spaces(
-            """01, a/a/a, None, None
-               02, a/a, None, None
-               02, a/a/b, None, None
-               02, a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
-               03, a/b/a, None, None
-               04, a, None, None
-               04, a/b, None, None
-               04, a/b/b, None, None
-               05, b/a/a, None, None
-               06, b/a, None, None
-               06, b/a/b, None, None
-               07, b/b/a, None, None
-               08, b, None, None
-               08, b/b, None, None
-               08, b/b/b, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
+            """01, /a/a/a/, None, None
+               02, /a/a/, None, None
+               02, /a/a/b/, None, None
+               02, /a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
+               03, /a/b/a/, None, None
+               04, /a/, None, None
+               04, /a/b/, None, None
+               04, /a/b/b/, None, None
+               05, /b/a/a/, None, None
+               06, /b/a/, None, None
+               06, /b/a/b/, None, None
+               07, /b/b/a/, None, None
+               08, /b/, None, None
+               08, /b/b/, None, None
+               08, /b/b/b/, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] Instructions created: 2 dir GETs (children of '') took M ms. stack: main:loop:svn_changesʔ
+             """[SECTION] Instructions created: 2 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 2 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 4 dir GETs (children of 'a, b') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Instructions created: 4 dir GETs (children of '/a/, /b/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 4 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 8 dir GETs (children of 'a/a, a/b, b/a, b/b') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Instructions created: 8 dir GETs (children of '/a/a/, /a/b/, /b/a/, /b/b/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 8 dirs, at F files/sec. stack: main:loop:GETs
-                [SECTION] Instructions created: 1 file GETs (children of 'a/a/b') took M ms. stack: main:loop:svn_changesʔ
-                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (a/a/b/txt), at F files/sec. stack: main:loop:GETs
+                [SECTION] Instructions created: 1 file GETs (children of '/a/a/b/') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/a/a/b/txt), at F files/sec. stack: main:loop:GETs
             """), self.simplify_output(self.process_output_one))
 
 
@@ -924,7 +922,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
     def get_status_dict(self):
-        return json.loads(self.file_contents(self.db_dir_one + "status.json"))
+        return json.loads(self.file_contents(self.db_dir_one + os.sep + "status.json"))
 
 
     def get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there(self):
@@ -1061,6 +1059,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         if p is not None:
             self.signal_stop_of_subsyncit(dir)
 
+
     def reset_test_dir(self, dirname):
         if os.path.exists(dirname):
             shutil.rmtree(dirname)
@@ -1071,7 +1070,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         if not os.path.exists(dir):
             os.makedirs(dir)
 
-        with open(dir + "subsyncit.stop", "w") as text_file:
+        stop_ = dir + "subsyncit.stop"
+        with open(stop_, "w") as text_file:
             text_file.write("anything")
 
     def wait_for_file_to_appear(self, file_should_appear):
@@ -1084,9 +1084,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def wait_for_URL_to_appear(self, url):
 
+        start = time.time()
         status = requests.get(url, auth=(self.user, self.passwd), verify=False).status_code
         while status == 404:
-            start = time.time()
             if time.time() - start > 15:
                 break
             time.sleep(.1)

@@ -427,6 +427,30 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
 
     @timedtest
+    def test_that_a_restarted_client_picks_up_where_it_left_off(self):
+
+        self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="hello", verify=False))
+
+        self.start_subsyncit_one(extra_opt="--do-not-listen-for-file-system-events")
+
+        try:
+            self.wait_for_file_to_appear(self.test_sync_dir_one + "output.txt")
+            self.signal_stop_of_subsyncit(self.test_sync_dir_one)
+            self.process_one.wait()
+            self.start_subsyncit_one()
+            time.sleep(2)
+        finally:
+            self.end_process_one()
+
+        output = self.simplify_output(self.process_output_one)
+        self.assertEquals(self.no_leading_spaces(
+             """[SECTION] Instructions created: 1 file GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
+                [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/output.txt), at F files/sec. stack: main:loop:GETs
+                [STARTING] last_root_revision=3
+            """), output)
+
+
+    @timedtest
     def test_both_change_detectors_turned_off_means_that_files_are_not_pushed(self):
 
         self.expect201(requests.put(self.svn_url + "output.txt", auth=(self.user, self.passwd), data="As First PUT Up To Svn", verify=False))

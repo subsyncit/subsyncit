@@ -441,12 +441,12 @@ class State(object):
 
 
     def __str__(self):
-        return "online: " + str(self.online) + ", last_scanned: " + str(self.last_scanned)
+        return "online: " + str(self.online) + ", last_scanned: " + str(self.last_scanned) + ", last_root_revision: " + str(self.last_root_revision)
 
 
     def toJSON(self):
         strftime('%Y-%m-%d %H:%M:%S')
-        return '{"online": ' + str(self.online).lower() + ', "last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "iteration": ' + str(self.iteration) + '}'
+        return '{"last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "last_root_revision": ' + str(self.last_root_revision) + '}'
 
 
     def ignore_fs_events_for_this_for_2_secs(self, file_name):
@@ -471,6 +471,18 @@ class State(object):
         if json != self.previously:
             with open(self.db_dir + "status.json", "w") as text_file:
                 text_file.write(json)
+
+
+    def load(self):
+        json_ = self.db_dir + "status.json"
+        if os.path.exists(json_):
+            with open(json_, "r") as text_file:
+                content = text_file.read()
+                import json
+                st = json.loads(content)
+                self.last_root_revision = st["last_root_revision"]
+                print("[STARTING] last_root_revision=" + str(self.last_root_revision))
+                self.last_scanned = time.mktime(time.strptime(st["last_scanned"], '%Y-%m-%d %H:%M:%S'))
 
 
 class ExcludedPatternNames(object):
@@ -1487,6 +1499,8 @@ def main(argv):
         file_system_watcher.schedule(notification_handler, config.args.absolute_local_root_path, recursive=True)
         file_system_watcher.daemon = True
         file_system_watcher.start()
+
+    state.load()
 
     try:
         while should_subsynct_keep_going(file_system_watcher, config.args.absolute_local_root_path, state):

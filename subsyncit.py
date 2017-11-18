@@ -721,7 +721,7 @@ def local_deletes(config, state):
                 state.files_table.remove(Query().FN == file_name)
                 if file_name.endswith("/"):
                     file_name = file_name[:-1]
-                parentGETʔ(state, dirname(file_name) + "/")
+                # parentGETʔ(state, dirname(file_name) + "/")
             except OSError:
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue

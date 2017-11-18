@@ -449,12 +449,12 @@ class State(object):
         return '{"online": ' + str(self.online).lower() + ', "last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "iteration": ' + str(self.iteration) + '}'
 
 
-    def doing_item(self, file_name):
+    def ignore_fs_events_for_this_for_2_secs(self, file_name):
         now = time.time()
         self.doing[file_name] = now
 
 
-    def is_doing(self, file_name):
+    def should_ignore_fs_events_for_this_for_nowʔ(self, file_name):
         now = time.time()
         doing_this_one = False
         for k in list(self.doing):
@@ -545,7 +545,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if event.is_directory:
             file_name += "/"
         file_name = "/" + file_name
-        if self.state.is_doing(file_name):
+        if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
             return
         self.local_adds_chgs_deletes_queue.add((file_name, "add_" + ("dir" if event.is_directory else "file")))
 
@@ -581,7 +581,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if event.is_directory:
             file_name += "/"
         file_name = "/" + file_name
-        if self.state.is_doing(file_name):
+        if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
             return
         if not event.is_directory and not event.src_path.endswith(self.config.args.absolute_local_root_path):
             add_queued = (file_name, "add_file") in self.local_adds_chgs_deletes_queue
@@ -1254,7 +1254,7 @@ def PUTs(config, state, requests_session):
 
 def GET_file(config, state, abs_local_file_path, old_sha1_should_be, file_name, requests_session):
     (rev, sha1, svn_baseline_rel_path_not_used) = svn_details(config, requests_session, file_name)
-    state.doing_item(file_name)
+    state.ignore_fs_events_for_this_for_2_secs(file_name)
     get = requests_session.get(config.args.svn_url + esc(file_name).replace(os.sep, "/"), stream=True)
     # See https://github.com/requests/requests/issues/2155 - Streaming gzipped responses
     # and https://stackoverflow.com/questions/16694907/how-to-download-large-file-in-python-with-requests-py
@@ -1288,7 +1288,7 @@ def GET(config, state, row, get_children, gets_list, requests_session):
         file_count += 1
         gets_list.append(file_name)
     else:
-        state.doing_item(file_name)
+        state.ignore_fs_events_for_this_for_2_secs(file_name)
         if not os.path.exists(abs_local_file_path):
             os.makedirs(abs_local_file_path)
             dir_count = make_directories_if_missing_in_db(config, state, file_name, requests_session, Get_Dir_Revisions_From_Svn())

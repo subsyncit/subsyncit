@@ -1054,8 +1054,6 @@ def DELETEs(config, state, requests_session):
 
     rows = state.files_table.search(Query().I == DELETE_ON_SERVER)
 
-    parent_gets = {}
-
     files_deleted = directories_deleted = 0
     for row in rows:
         fn = row['FN']
@@ -1074,25 +1072,11 @@ def DELETEs(config, state, requests_session):
             files_deleted += 1
             state.files_table.remove(Query().FN == row['FN'])
 
-        if fn.endswith("/"):
-            fn = fn[:-1]
-        parent_gets[dirname(fn) + "/"] = True
-
-    for parent in parent_gets.items():
-        parentGETʔ(state, parent[0])
-
     speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE." if len(rows) > 0 else "."
 
     section_end(files_deleted > 0 or directories_deleted > 0,  "DELETEs on Subversion server took %s, "
           + str(directories_deleted) + " directories and " + str(files_deleted) + " files"
           + speed, start)
-
-
-def parentGETʔ(state, parent):
-    if parent and parent != "":
-        parent_row = state.files_table.get(Query().FN == parent)
-        if parent_row and parent_row['I'] == None:
-            update_instruction_in_table(state.files_table, GET_FROM_SERVER, parent)
 
 
 def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_session):
@@ -1235,7 +1219,6 @@ def PUTs(config, state, requests_session):
                         osstat = os.stat(abs_local_file_path)
                         size_ts = osstat.st_size + osstat.st_mtime
                         update_sha_and_revision_for_row(config, state, requests_session, file_name, new_local_sha1, size_ts)
-                        parentGETʔ(state, file_name)
                         put_count += 1
                         update_instruction_in_table(state.files_table, None, file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
@@ -1321,8 +1304,6 @@ def GET(config, state, row, get_children, gets_list, requests_session):
             dir_count = make_directories_if_missing_in_db(config, state, file_name, requests_session, Get_Dir_Revisions_From_Svn())
         get_children.append((file_name, row['RV']))
     update_instruction_in_table(state.files_table, None, file_name)
-    if file_count > 0:
-        parentGETʔ(state, dirname(file_name[:-1]) + "/")
     return (file_count, dir_count)
 
 
@@ -1363,8 +1344,9 @@ def GETs(config, state, requests_session):
 
 
 def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queue, requests_session):
-    (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = \
-        svn_details(config, requests_session, "/")  # root
+
+    (root_revision_on_remote_svn_repo, sha1, svn_baseline_rel_path) = svn_details(config, requests_session, "/")  # root
+
     config.svn_baseline_rel_path = svn_baseline_rel_path
     if root_revision_on_remote_svn_repo > 0:
 

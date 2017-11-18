@@ -178,7 +178,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end_process_one_and_two()
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+        rows = self.get_db_rows()
         self.should_start_with(rows, 0, "01, /testfile.txt, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0")
 
 
@@ -208,7 +208,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end_process_one_and_two()
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+        rows = self.get_db_rows()
         self.should_start_with(rows, 0, "01, /testfile.txt, 3f19e1ea9c19f0c6967723b453a423340cbd6e36, 3f19e1ea9c19f0c6967723b453a423340cbd6e36")
 
 
@@ -270,7 +270,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end_process_one()
 
-        # files_table = self.get_db_rows(test_start, self.test_sync_dir_a)
+        # files_table = self.get_db_rows()
         #
         # print(str(files_table.all()))
 
@@ -323,7 +323,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end_process_one()
 
-            rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+            rows = self.get_db_rows()
             if len(rows) > 0:
                 print("row 0 " + str(rows[0]))
 
@@ -446,7 +446,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 1 file GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/output.txt), at F files/sec. stack: main:loop:GETs
-                [STARTING] last_root_revision=3
+                [STARTING] last_root_revision=XX
             """), output)
 
 
@@ -668,8 +668,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         sz = os.stat(filename).st_size
         self.upload_file(filename, self.svn_url + "testBigRandomFile")
 
-        # self.list_files(self.testSyncDir1)
-
         start = time.time()
         self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
         try:
@@ -677,32 +675,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", sz)
             print(" ... took secs: " + str(round(time.time() - start, 1)))
 
-            # self.list_files(self.testSyncDir1)
-
             self.signal_stop_of_subsyncit(self.test_sync_dir_one)
+            self.journal_to_one("--controlled shutdown signalled--")
             self.process_one.wait()
 
-            # self.list_files(self.testSyncDir1)
-
             self.make_a_big_random_file(filename, self.size)
-
-            # self.list_files(self.testSyncDir1)
-
             self.upload_file(filename, self.svn_url + "testBigRandomFile")
-
-            # self.list_files(self.testSyncDir1)
-
+            self.journal_to_one("--Uploaded a newer version of testBigRandomFile--")
             start = time.time()
-
-            print("start Subsyncit again")
+            self.journal_to_one("--Restart Subsyncit--")
             self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
             self.wait_for_file_contents_to_be_sized_below(self.test_sync_dir_one + "testBigRandomFile", (sz * 99 / 100))
-            # self.list_files(self.testSyncDir1)
             self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", (sz / 10))
-            # self.list_files(self.testSyncDir1)
+            self.journal_to_one("--kill Subsyncit--")
             self.process_one.kill()
-            print("Killed after secs: " + str(round(time.time() - start, 1)))
-            # self.list_files(self.testSyncDir1)
+            self.journal_to_one("--killed after secs: " + str(round(time.time() - start, 1)))
 
             aborted_get_size = os.stat(self.test_sync_dir_one + "testBigRandomFile").st_size
 
@@ -710,15 +697,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
             self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
-            #self.list_files(self.testSyncDir1)
+            self.journal_to_one("-- DB ROWS START --")
+            self.journal_to_one("\n".join(self.get_db_rows()))
+            self.journal_to_one("-- DB ROWS END --")
 
+            self.journal_to_one("--Restart Subsyncit--")
             self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
             self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", sz)
         finally:
             self.end_process_one()
 
 
-        # self.list_files(self.testSyncDir1)
 
         clash_file = glob2.glob(self.test_sync_dir_one + "*.clash_*")[0]
         self.assertEqual(os.stat(clash_file).st_size, aborted_get_size)
@@ -789,12 +778,12 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.get_rev_summary_for_root_barney_wilma_fred_and_bambam_if_there())
 
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+        rows = self.get_db_rows()
 
-        self.should_start_with(rows, 0, "01, /fred/, None, None")
-        self.should_start_with(rows, 1, "02, /barney/, None, None")
-        self.should_start_with(rows, 2, "03, /wilma/, None, None")
-        self.should_start_with(rows, 3, "03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42")
+        self.should_start_with(rows, 0, "01, /fred/, None, None, None")
+        self.should_start_with(rows, 1, "02, /barney/, None, None, None")
+        self.should_start_with(rows, 2, "03, /wilma/, None, None, None")
+        self.should_start_with(rows, 3, "03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42, None")
 
         output = self.simplify_output(self.process_output_one)
         self.assertEquals(self.no_leading_spaces(
@@ -845,14 +834,14 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_one()
 
 
-        rows = self.get_db_rows(test_start, self.test_sync_dir_one)
+        rows = self.get_db_rows()
 
         self.assertEquals(self.no_leading_spaces(
-             """01, /fred/, None, None
-                02, /barney/, None, None
-                03, /wilma/, None, None
-                03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42"""),
-            "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
+             """01, /fred/, None, None, None
+                02, /barney/, None, None, None
+                03, /wilma/, None, None, None
+                03, /wilma/bambam, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42, None"""),
+            "\n".join(rows))
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 3 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
@@ -898,21 +887,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         self.process_one.wait()
 
         self.assertEquals(self.no_leading_spaces(
-            """01, /a/a/a/, None, None
-               02, /a/a/, None, None
-               02, /a/a/b/, None, None
-               02, /a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42
-               03, /a/b/a/, None, None
-               04, /a/, None, None
-               04, /a/b/, None, None
-               04, /a/b/b/, None, None
-               05, /b/a/a/, None, None
-               06, /b/a/, None, None
-               06, /b/a/b/, None, None
-               07, /b/b/a/, None, None
-               08, /b/, None, None
-               08, /b/b/, None, None
-               08, /b/b/b/, None, None"""), "\n".join(self.get_db_rows(test_start, self.test_sync_dir_one)))
+            """01, /a/a/a/, None, None, None
+               02, /a/a/, None, None, None
+               02, /a/a/b/, None, None, None
+               02, /a/a/b/txt, c22b5f9178342609428d6f51b2c5af4c0bde6a42, c22b5f9178342609428d6f51b2c5af4c0bde6a42, None
+               03, /a/b/a/, None, None, None
+               04, /a/, None, None, None
+               04, /a/b/, None, None, None
+               04, /a/b/b/, None, None, None
+               05, /b/a/a/, None, None, None
+               06, /b/a/, None, None, None
+               06, /b/a/b/, None, None, None
+               07, /b/b/a/, None, None, None
+               08, /b/, None, None, None
+               08, /b/b/, None, None, None
+               08, /b/b/b/, None, None, None"""), "\n".join(self.get_db_rows()))
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 2 dir GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
@@ -1036,7 +1025,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     def should_start_with(self, rows, row, start_with_this):
         self.assertTrue(rows[row].startswith(start_with_this), msg="Was actually: " + rows[row])
 
-    def get_db_rows(self, test_start, sync_dir):
+    def get_db_rows(self):
         db_ = self.db_dir_one + os.sep + "subsyncit.db"
 
         time.sleep(2.5)
@@ -1054,7 +1043,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         rv = ""
         for row in files_table.all():
-            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['FN'] + ", " + str(row['RS'])+ ", " + str(row['LS'])  + "\n"
+            rv += str(revision_map[row['RV']]).zfill(2) + ", " + row['FN'] + ", " + str(row['RS'])+ ", " + str(row['LS']) + ", " + str(row['I'])  + "\n"
 
         return sorted(rv.splitlines())
 
@@ -1166,8 +1155,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         start = time.time()
         while os.stat(f).st_size < sz:
             time.sleep(.01)
-            if time.time() - start > 15:
-                self.fail("should have made it above that size by now")
+            if time.time() - start > 20:
+                self.fail("should have made it above " + str(sz) + " by now, but is " + str(os.stat(f).st_size))
 
 
     def wait_for_file_contents_to_be_sized_below(self, f, sz):
@@ -1219,8 +1208,9 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         regex3 = re.compile(r"[0-9]\d*(\.\d*)? ns")
         regex4 = re.compile(r"[0-9]\d*(\.\d*)? files/sec")
         regex5 = re.compile(r"[0-9]\d*(\.\d*)? secs per")
+        regex6 = re.compile(r"root_revision=\d+")
         for line in op.splitlines():
-            rv += regex5.sub("S secs per", regex4.sub("F files/sec", regex3.sub("N ns", regex2.sub("M ms", regex.sub("", line))))) + "\n"
+            rv += regex6.sub("root_revision=XX", regex5.sub("S secs per", regex4.sub("F files/sec", regex3.sub("N ns", regex2.sub("M ms", regex.sub("", line)))))) + "\n"
         return rv.replace("N ns", "M ms")
 
         pass

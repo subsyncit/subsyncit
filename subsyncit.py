@@ -181,6 +181,7 @@ class MyRequestsTracer():
              '</D:prop>\n' \
              '</D:propfind>\n', headers={'Depth': str(depth)})
             status = request.status_code
+
             return request
         finally:
             durn = time.time() - start
@@ -247,8 +248,8 @@ class MyRequestsTracer():
             youngest_rev = options.headers["SVN-Youngest-Rev"].strip()
 
             url = config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path
-                                              + "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path, 1)
-            propfind = self.delegate.request("PROPFIND", url + file_name,
+                                              + "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path + file_name, 1)
+            propfind = self.delegate.request("PROPFIND", url,
                                              data='<?xml version="1.0" encoding="utf-8"?>'
                                                       '<propfind xmlns="DAV:">'
                                                       '<prop>'
@@ -308,7 +309,7 @@ class MyTinyDBTrace():
             return search
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.search: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def get(self, arg0):
@@ -321,7 +322,7 @@ class MyTinyDBTrace():
             return get
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.get: [" + result + "] " + str(arg0) + " " + english_duration(durn) + " " + str(get))
 
     def remove(self, arg0):
@@ -333,7 +334,7 @@ class MyTinyDBTrace():
             return remove
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.remove: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def update(self, arg0, arg1):
@@ -345,7 +346,7 @@ class MyTinyDBTrace():
             return update
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.update: [" + result + "] " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
 
     def insert(self, arg0):
@@ -357,7 +358,7 @@ class MyTinyDBTrace():
             return insert
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.insert: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
     def contains(self, arg0):
@@ -369,8 +370,22 @@ class MyTinyDBTrace():
             return contains
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.contains: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+
+
+    def count(self, arg0):
+        start = time.time()
+        result = ""
+        try:
+            count = self.delegate.count(arg0)
+            result = str(count) + " rows"
+            return count
+        finally:
+            durn = time.time() - start
+            if durn > .1 or self.always_print:
+                self.db_debug("TinyDB.count: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+
 
     def all(self):
         start = time.time()
@@ -381,7 +396,7 @@ class MyTinyDBTrace():
             return all
         finally:
             durn = time.time() - start
-            if durn > .01 or self.always_print:
+            if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.all: [" + result + "] " + english_duration(durn))
 
 
@@ -436,7 +451,7 @@ class State(object):
         self.iteration = 0
         self.last_scanned = 0
         self.last_root_revision = 0
-        self.previously = ""
+        self.previous_root_revision = -1
         self.doing = {}
 
 
@@ -446,7 +461,9 @@ class State(object):
 
     def toJSON(self):
         strftime('%Y-%m-%d %H:%M:%S')
-        return '{"last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "last_root_revision": ' + str(self.last_root_revision) + '}'
+        online_ = '{"last_scanned": "' + strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.last_scanned)) + '", "last_root_revision": ' + str(self.last_root_revision) + ', "online": ' + str(
+            self.online).lower() + '}'
+        return online_
 
 
     def ignore_fs_events_for_this_for_2_secs(self, file_name):
@@ -468,9 +485,10 @@ class State(object):
     def save_if_changed(self):
         self.iteration += 1
         json = self.toJSON()
-        if json != self.previously:
+        if self.last_root_revision != self.previous_root_revision:
             with open(self.db_dir + "status.json", "w") as text_file:
                 text_file.write(json)
+                self.previous_root_revision = self.last_root_revision
 
 
     def load(self):
@@ -897,7 +915,6 @@ def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_
             in_subversion = file_is_in_subversion(state.files_table, file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:
-                # print("File to add: " + file_name + " is not in subversion")
                 upsert_row_in_table(state.files_table, file_name, instruction=PUT_ON_SERVER)
         elif action == "change":
             update_instruction_in_table(state.files_table, PUT_ON_SERVER, file_name)
@@ -1086,8 +1103,6 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
 
     if len(dir_list) == 0:
         return
-
-    # print("svn_changesʔ " + str(dir_list))
 
     try:
         for (directory, curr_local_rev) in dir_list:
@@ -1511,7 +1526,8 @@ def main(argv):
 
             loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queue, requests_session)
 
-            state.save_if_changed()
+            if state.files_table.count(Query().I != None) == 0:
+                state.save_if_changed()
 
             if not requests_session.anything_substantial_happened():
                 time.sleep(config.args.sleep_secs)

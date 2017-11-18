@@ -1110,7 +1110,7 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
             curr_rmt_rev = requests_session.svn_revision(config, directory)
             if curr_local_rev != curr_rmt_rev:
                 update_row_revision(state.files_table, directory, curr_rmt_rev)
-                parentGETʔ(state, directory)
+                # parentGETʔ(state, directory)
 
                 children = svn_dir_list(config, requests_session, esc(directory))
                 unprocessed_files = {}

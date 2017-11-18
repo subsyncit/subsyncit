@@ -577,7 +577,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         file_name = "/" + file_name
         if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
             return
-        self.local_adds_chgs_deletes_queue.add((file_name, "add_" + ("dir" if event.is_directory else "file")))
+        self.local_adds_chgs_deletes_queue.add((file_name, "add"))
 
 
     def stop_subsyncit(self, event):
@@ -614,7 +614,7 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
             return
         if not event.is_directory and not event.src_path.endswith(self.config.args.absolute_local_root_path):
-            add_queued = (file_name, "add_file") in self.local_adds_chgs_deletes_queue
+            add_queued = (file_name, "add") in self.local_adds_chgs_deletes_queue
             chg_queued = (file_name, "change") in self.local_adds_chgs_deletes_queue
             if not add_queued and not chg_queued:
                 self.local_adds_chgs_deletes_queue.add((file_name, "change"))
@@ -909,9 +909,9 @@ def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_
     initial_queue_length = len(local_adds_chgs_deletes_queue)
     while len(local_adds_chgs_deletes_queue) > 0:
         (file_name, action) = local_adds_chgs_deletes_queue.pop(0)
-        if action == "add_dir":
+        if action == "add" and file_name.endswith("/"):
             upsert_row_in_table(state.files_table, file_name, instruction=MAKE_DIR_ON_SERVER)
-        elif action == "add_file":
+        elif action == "add":
             in_subversion = file_is_in_subversion(state.files_table, file_name)
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if not in_subversion:

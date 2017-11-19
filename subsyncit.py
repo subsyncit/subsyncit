@@ -538,7 +538,7 @@ class ExcludedPatternNames(object):
         return False
 
 
-class Make_dir_on_Svn_And_Get_Revision():
+class MakeDirOnSvnAndGetRevision():
 
     def revision_for_dir(self, requests_session, dir, config):
         request = requests_session.mkcol(config.args.svn_url + dir.replace(os.sep, "/"))
@@ -548,7 +548,7 @@ class Make_dir_on_Svn_And_Get_Revision():
         raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
 
 
-class Get_Dir_Revisions_From_Svn():
+class GetDirRevisionsFromSvn():
 
     def revision_for_dir(self, requests_session, dir, config):
         return requests_session.svn_revision(config, dir.replace(os.sep, "/"))
@@ -1169,7 +1169,7 @@ def PUT(config, state, requests_session, abs_local_file_path, alleged_remote_sha
     if file_name.endswith("/"):
         file_name = file_name[:-1]
     dirs_made += make_directories_if_missing_in_db(config, state, dirname(file_name) + "/",
-                                                   requests_session, Make_dir_on_Svn_And_Get_Revision())
+                                                   requests_session, MakeDirOnSvnAndGetRevision())
 
     if alleged_remote_sha1:
         (ver, actual_remote_sha1, not_used_here) = svn_details(config, requests_session, file_name)
@@ -1301,7 +1301,7 @@ def GET(config, state, row, get_children, gets_list, requests_session):
         state.ignore_fs_events_for_this_for_2_secs(file_name)
         if not os.path.exists(abs_local_file_path):
             os.makedirs(abs_local_file_path)
-            dir_count = make_directories_if_missing_in_db(config, state, file_name, requests_session, Get_Dir_Revisions_From_Svn())
+            dir_count = make_directories_if_missing_in_db(config, state, file_name, requests_session, GetDirRevisionsFromSvn())
         get_children.append((file_name, row['RV']))
     update_instruction_in_table(state.files_table, None, file_name)
     return (file_count, dir_count)

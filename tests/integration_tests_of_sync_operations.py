@@ -363,15 +363,21 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_deleted_file_syncs_back(self):
 
-        self.start_one_and_two_subsyncits()
+        self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one,
+                                                extra_opt='--do-not-scan-file-system-periodically')
+        self.process_two = self.start_subsyncit(self.svn_url, self.test_sync_dir_two, self.process_output_two,
+                                                extra_opt='--do-not-scan-file-system-periodically')
+        time.sleep(2)
+
         try:
             a_path = self.test_sync_dir_one + "testfile"
             with open(a_path, "w", encoding="utf-8") as text_file:
                 text_file.write("Hello")
             b_path = self.test_sync_dir_two + "testfile"
             self.wait_for_file_to_appear(b_path)
-            time.sleep(.1)
+            time.sleep(1)
             self.journal_to_one_and_two("-- orig sync'd from one to two --")
+            print(b_path)
             os.remove(b_path)
             self.wait_for_file_to_disappear(a_path)
             time.sleep(2)
@@ -379,8 +385,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.end_process_one_and_two()
 
         self.assertEquals(self.no_leading_spaces(
-             """[SECTION] File system scan for extra PUTs: 1 missed adds and 0 missed changes (added/changed while Subsyncit was not running) took M ms.
-                [SECTION] Batch 1 of: PUT(s) to Svn took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
+             """[SECTION] Batch 1 of: PUT(s) to Svn took M ms, 1 PUT files, taking M ms each. stack: main:loop:PUTs
                 -- orig sync'd from one to two --
                 [SECTION] Instructions created: GETs 1 local deletes (children of '/') took M ms. stack: main:loop:svn_changesʔ
                 [SECTION] Performing 1 local deletes took M ms. stack: main:loop:local_deletes             
@@ -388,9 +393,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
         self.assertEquals(self.no_leading_spaces(
              """[SECTION] Instructions created: 1 file GETs (children of '/') took M ms. stack: main:loop:svn_changesʔ
-                -- orig sync'd from one to two --
                 [SECTION] Batch 1 of: GET(s) from Svn took M ms: 1 files (/testfile), at F files/sec. stack: main:loop:GETs
-                [SECTION] : 1 extra DELETEs (deleted locally while Subsyncit was not running) took M ms.
+                -- orig sync'd from one to two --
                 [SECTION] DELETEs on Subversion server took M ms, 0 directories and 1 files, S secs per DELETE.
             """), self.simplify_output(self.process_output_two))
 

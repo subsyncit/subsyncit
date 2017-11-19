@@ -598,7 +598,8 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
             return
         if event.is_directory:
             file_name += "/"
-        self.local_adds_chgs_deletes_queue.add(("/" + file_name, "delete"))
+        file_name = "/" + file_name
+        self.local_adds_chgs_deletes_queue.add((file_name, "delete"))
 
 
     def on_modified(self, event):

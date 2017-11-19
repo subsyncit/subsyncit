@@ -312,6 +312,7 @@ class MyTinyDBTrace():
             if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.search: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
+
     def get(self, arg0):
         start = time.time()
         result = ""
@@ -325,6 +326,7 @@ class MyTinyDBTrace():
             if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.get: [" + result + "] " + str(arg0) + " " + english_duration(durn) + " " + str(get))
 
+
     def remove(self, arg0):
         start = time.time()
         result = ""
@@ -337,17 +339,19 @@ class MyTinyDBTrace():
             if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.remove: [" + result + "] " + str(arg0) + " " + english_duration(durn))
 
-    def update(self, arg0, arg1):
+
+    def update(self, fields, cond=None, doc_ids=None):
         start = time.time()
         result = ""
         try:
-            update = self.delegate.update(arg0, arg1)
+            update = self.delegate.update(fields, cond=cond, doc_ids=doc_ids)
             result = "✘" if not update else "✔"
             return update
         finally:
             durn = time.time() - start
             if durn > .1 or self.always_print:
-                self.db_debug("TinyDB.update: [" + result + "] " + str(arg0) + " " + str(arg1) + " " + english_duration(durn))
+                self.db_debug("TinyDB.update: [" + result + "] " + str(fields) + " " + str(cond) + " " + str(doc_ids) + " " + english_duration(durn))
+
 
     def insert(self, arg0):
         start = time.time()
@@ -360,6 +364,7 @@ class MyTinyDBTrace():
             durn = time.time() - start
             if durn > .1 or self.always_print:
                 self.db_debug("TinyDB.insert: [" + result + "] " + str(arg0) + " " + english_duration(durn))
+
 
     def contains(self, arg0):
         start = time.time()
@@ -475,10 +480,11 @@ class State(object):
         now = time.time()
         doing_this_one = False
         for k in list(self.doing):
-            if k == file_name:
-                doing_this_one = True
             if now - self.doing[k] > 2:
                 self.doing.pop(k)
+            elif k == file_name:
+                doing_this_one = True
+
         return doing_this_one
 
 
@@ -599,6 +605,8 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         if event.is_directory:
             file_name += "/"
         file_name = "/" + file_name
+        if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
+            return
         self.local_adds_chgs_deletes_queue.add((file_name, "delete"))
 
 
@@ -717,6 +725,7 @@ def local_deletes(config, state):
             file_name = row['FN']
             name = (config.args.absolute_local_root_path + file_name)
             try:
+                state.ignore_fs_events_for_this_for_2_secs(file_name)
                 os.remove(name)
                 deletes += 1
                 state.files_table.remove(Query().FN == file_name)
@@ -758,20 +767,7 @@ def upsert_row_in_table(files_table, file_name, instruction):
         return
 
     if instruction is not None:
-        update_instruction_in_table(files_table, instruction, file_name)
-
-
-def update_instruction_in_table(files_table, instruction, file_name):
-    if instruction is not None and instruction == DELETE_ON_SERVER:
-
         files_table.update({'I': instruction}, Query().FN == file_name)
-
-        # TODO LIKE
-
-    else:
-
-        files_table.update({'I': instruction}, Query().FN == file_name)
-
 
 def get_file_name(config, full_path):
     if not full_path.startswith(config.args.absolute_local_root_path):
@@ -912,18 +908,17 @@ def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_
         (file_name, action) = local_adds_chgs_deletes_queue.pop(0)
         if action == "add" and file_name.endswith("/"):
             upsert_row_in_table(state.files_table, file_name, instruction=MAKE_DIR_ON_SERVER)
-        elif action == "add":
-            in_subversion = file_is_in_subversion(state.files_table, file_name)
+            continue
+
+        row = state.files_table.get(Query().FN == file_name)
+        if action == "add":
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
-            if not in_subversion:
+            if row is None or row['RS'] is None:
                 upsert_row_in_table(state.files_table, file_name, instruction=PUT_ON_SERVER)
         elif action == "change":
-            update_instruction_in_table(state.files_table, PUT_ON_SERVER, file_name)
+            state.files_table.update({'I': PUT_ON_SERVER}, doc_ids=[row.doc_id])
         elif action == "delete":
-            in_subversion = file_is_in_subversion(state.files_table, file_name)
-            # 'svn up' can delete a file, causing watchdog to trigger a delete notification .. to be ignored
-            if in_subversion:
-                update_instruction_in_table(state.files_table, DELETE_ON_SERVER, file_name)
+            state.files_table.update({'I': DELETE_ON_SERVER}, doc_ids=[row.doc_id])
         else:
             raise Exception("Unknown action " + action)
 
@@ -982,7 +977,7 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
         else:
             size_ts = entry.stat().st_size + entry.stat().st_mtime
             if size_ts != row["ST"]:
-                update_instruction_in_table(state.files_table, PUT_ON_SERVER, file_name)
+                state.files_table.update({'I': PUT_ON_SERVER}, Query().FN == file_name)
                 to_change += 1
 
     section_end(to_change > 0 or to_add > 0,  "File system scan for extra PUTs: " + str(to_add) + " missed adds and " + str(to_change)
@@ -1004,7 +999,7 @@ def scan_for_any_missed_deletes(config, state):
 
         file_name = row['FN']
         if not os.path.exists(config.args.absolute_local_root_path + file_name) and row['I'] == None:
-            update_instruction_in_table(state.files_table, DELETE_ON_SERVER, file_name)
+            state.files_table.update({'I': DELETE_ON_SERVER}, Query().FN == file_name)
             to_delete += 1
 
     section_end(to_delete > 0,  ": " + str(to_delete)
@@ -1124,7 +1119,7 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
                         if match['I'] != None:
                             continue
                         if not match['RS'] == sha1:
-                            update_instruction_in_table(state.files_table, GET_FROM_SERVER, fn)
+                            state.files_table.update({'I': GET_FROM_SERVER}, Query().FN == fn)
                             actioned = True
                             if fn.endswith('/'):
                                 get_dir_count += 1
@@ -1142,7 +1137,7 @@ def svn_changesʔ(config, state, dir_list, excluded_filename_patterns, requests_
                 for fn, val in unprocessed_files.items():
                     actioned = True
                     local_deletes += 1
-                    update_instruction_in_table(state.files_table, DELETE_LOCALLY, fn)
+                    state.files_table.update({'I': DELETE_LOCALLY}, Query().FN == fn)
             if actioned:
                 directories.append(directory)
     finally:
@@ -1213,7 +1208,7 @@ def PUTs(config, state, requests_session):
                         # don't do it.
 
                         num_rows = num_rows -1
-                        update_instruction_in_table(state.files_table, None, file_name)
+                        state.files_table.update({'I': None}, Query().FN == file_name)
                     else:
                         dirs_made += PUT(config, state, requests_session, abs_local_file_path, row['RS'], file_name)  # <h1>Created</h1>
 
@@ -1221,15 +1216,15 @@ def PUTs(config, state, requests_session):
                         size_ts = osstat.st_size + osstat.st_mtime
                         update_sha_and_revision_for_row(config, state, requests_session, file_name, new_local_sha1, size_ts)
                         put_count += 1
-                        update_instruction_in_table(state.files_table, None, file_name)
+                        state.files_table.update({'I': None}, Query().FN == file_name)
                 except NotPUTtingAsItWasChangedOnTheServerByAnotherUser:
                     # Let another cycle get back to the and the GET to win.
                     not_actually_changed += 1
                     possible_clash_encountered = True
-                    update_instruction_in_table(state.files_table, None, file_name)
+                    state.files_table.update({'I': None}, Query().FN == file_name)
                 except NotPUTtingAsFileStillBeingWrittenTo as e:
                     not_actually_changed += 1
-                    update_instruction_in_table(state.files_table, None, file_name)
+                    state.files_table.update({'I': None}, Query().FN == file_name)
                 except NotPUTtingAsTheServerObjected as e:
                     not_actually_changed += 1
                     if "txn-current-lock': Permission denied" in e.message:
@@ -1304,7 +1299,7 @@ def GET(config, state, row, get_children, gets_list, requests_session):
             os.makedirs(abs_local_file_path)
             dir_count = make_directories_if_missing_in_db(config, state, file_name, requests_session, GetDirRevisionsFromSvn())
         get_children.append((file_name, row['RV']))
-    update_instruction_in_table(state.files_table, None, file_name)
+    state.files_table.update({'I': None}, Query().FN == file_name)
     return (file_count, dir_count)
 
 
@@ -1494,7 +1489,7 @@ def main(argv):
             file_system_watcher = WindowsApiObserver
 
         notification_handler = FileSystemNotificationHandler(config, state, local_adds_chgs_deletes_queue, file_system_watcher, excluded_filename_patterns)
-        file_system_watcher.schedule(notification_handler, config.args.absolute_local_root_path, recursive=True)
+        file_system_watcher.schedule(notification_handler, config.args.absolute_local_root_path + os.sep, recursive=True)
         file_system_watcher.daemon = True
         file_system_watcher.start()
 

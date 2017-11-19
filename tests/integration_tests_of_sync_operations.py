@@ -375,7 +375,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                 text_file.write("Hello")
             b_path = self.test_sync_dir_two + "testfile"
             self.wait_for_file_to_appear(b_path)
-            time.sleep(1)
+            time.sleep(2) # Needed because of the 2 seconds grace on FS actions for recently downloaded (GET) files
             self.journal_to_one_and_two("-- orig sync'd from one to two --")
             print(b_path)
             os.remove(b_path)

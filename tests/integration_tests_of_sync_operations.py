@@ -219,7 +219,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         # It is alleged that some characters are not allowed in right-of-the-port-number paths.
         # Between them Apache2 and Subversion munge a few for display purposes. That's either on the way into Subversion,
         # or on the way back over HTTP into the file system. No matter - the most important representation of file name
-        # is in the file system, and we only require consistent GET/PUT from/to that.
+        # is in the local file system, and we only require consistency GET/PUT from/to that.
 
 #        test_start = time.time()
 
@@ -249,7 +249,7 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
                         files_not_found_in_subversion.remove(f)
                 elapsed = time.time() - start
 
-            self.assertEquals(len(files_not_found_in_subversion), 1, str(files_not_found_in_subversion))
+            self.assertEquals(len(files_not_found_in_subversion), 1, "These not found in svn: " + str(files_not_found_in_subversion))
 
             # `?` isn't handled seamlessly by the requests library
             if requests.get(self.svn_url + "c?c".replace("?", "%3f"),
@@ -270,10 +270,27 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         finally:
             self.end_process_one()
 
-        # files_table = self.get_db_rows()
-        #
-        # print(str(files_table.all()))
+        rows = self.get_db_rows()
 
+        self.should_start_with(rows, 0, '01, /CONTROL, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 1, '02, /i(i, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 2, '03, /g+g, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 3, '04, /l]l, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 4, '05, /r~r, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 5, '06, /c?c, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 6, '07, /j)j, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 7, '08, /d$d, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 8, '09, /q*q, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 9, '10, /o"o, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 10, '11, /p`p, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 11, '12, /b{b, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 12, '13, /f=f, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 13, '14, /h,h, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 14, '15, /m:m, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 15, '16, /e;e, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 16, "17, /n'n, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None")
+        self.should_start_with(rows, 17, '18, /k[k, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
+        self.should_start_with(rows, 18, '19, /a&a, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0, None')
 
 
     @timedtest
@@ -692,13 +709,14 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.journal_to_one("--killed after secs: " + str(round(time.time() - start, 1)))
 
             aborted_get_size = os.stat(self.test_sync_dir_one + "testBigRandomFile").st_size
-
             print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n \\/")
-
             self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
+            rows_text = "\n".join(self.get_db_rows())
+            # self.assertEquals("xxx", rows_text)
+
             self.journal_to_one("-- DB ROWS START --")
-            self.journal_to_one("\n".join(self.get_db_rows()))
+            self.journal_to_one(rows_text)
             self.journal_to_one("-- DB ROWS END --")
 
             self.journal_to_one("--Restart Subsyncit--")
@@ -706,7 +724,6 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.wait_for_file_contents_to_be_sized_above_or_eq_too(self.test_sync_dir_one + "testBigRandomFile", sz)
         finally:
             self.end_process_one()
-
 
 
         clash_file = glob2.glob(self.test_sync_dir_one + "*.clash_*")[0]

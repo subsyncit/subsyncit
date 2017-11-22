@@ -682,12 +682,17 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
     @timedtest
     def test_a_partially_downloaded_big_file_recovers(self):
 
-        filename = str(sh.pwd()).strip('\n') + "/testBigRandomFile"
+        filename1 = str(sh.pwd()).strip('\n') + "/testBigRandomFile1"
+        filename2 = str(sh.pwd()).strip('\n') + "/testBigRandomFile2"
         start = time.time()
-        self.make_a_big_random_file(filename, self.size)
 
-        sz = os.stat(filename).st_size
-        self.upload_file(filename, self.svn_url + "testBigRandomFile")
+        if not os.path.exists(filename1):
+            self.make_a_big_random_file(filename1, self.size)
+        if not os.path.exists(filename2):
+            self.make_a_big_random_file(filename2, self.size)
+
+        sz = os.stat(filename1).st_size
+        self.upload_file(filename1, self.svn_url + "testBigRandomFile")
 
         start = time.time()
         self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
@@ -700,9 +705,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             self.journal_to_one("--controlled shutdown signalled--")
             self.process_one.wait()
 
-            self.make_a_big_random_file(filename, self.size)
-            self.upload_file(filename, self.svn_url + "testBigRandomFile")
-            self.journal_to_one("--Uploaded a newer version of testBigRandomFile--")
+            self.upload_file(filename2, self.svn_url + "testBigRandomFile")
+            self.journal_to_one("--Uploaded a alternate version of testBigRandomFile--")
             start = time.time()
             self.journal_to_one("--Restart Subsyncit--")
             self.process_one = self.start_subsyncit(self.svn_url, self.test_sync_dir_one, self.process_output_one)
@@ -716,11 +720,8 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
             print("\\  / YES, that 30 lines of a process being killed and the resulting stack trace is intentional at this stage in the integration test suite\n \\/")
             self.assertNotEquals(aborted_get_size, sz, "Aborted file size: " + str(aborted_get_size) + " should have been less that the ultimate size of the test file: " + str(sz))
 
-            rows_text = "\n".join(self.get_db_rows())
-            # self.assertEquals("xxx", rows_text)
-
             self.journal_to_one("-- DB ROWS START --")
-            self.journal_to_one(rows_text)
+            self.journal_to_one(self.get_db_rows_as_text())
             self.journal_to_one("-- DB ROWS END --")
 
             self.journal_to_one("--Restart Subsyncit--")
@@ -1024,9 +1025,10 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def make_a_big_random_file(self, filename, size):
         start = time.time()
-        print("Making " + size + " MB random file (time consuming) ... ")
+        print("Making " + size + " MB random file " + filename + " (potentially time consuming, but once off) ... ")
         sh.bash("tests/make_a_so_big_file.sh", filename, size)
         print(" ... secs: " + str(round(time.time() - start, 1)))
+
 
     def list_files(self, root):
         glob = glob2.glob(root + "**")
@@ -1036,8 +1038,10 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
         for s in glob:
             print("  " + (str(s)) + " " + str(os.stat(str(s)).st_size))
 
+
     def expect201(self, commandOutput):
         self.assertEqual("<Response [201]>", str(commandOutput))
+
 
     def expect204(self, commandOutput):
         self.assertEqual("<Response [204]>", str(commandOutput))
@@ -1045,6 +1049,11 @@ class IntegrationTestsOfSyncOperations(unittest.TestCase):
 
     def should_start_with(self, rows, row, start_with_this):
         self.assertTrue(rows[row].startswith(start_with_this), msg="Was actually: " + rows[row])
+
+
+    def get_db_rows_as_text(self):
+        return "\n".join(self.get_db_rows())
+
 
     def get_db_rows(self):
         db_ = self.db_dir_one + os.sep + "subsyncit.db"

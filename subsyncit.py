@@ -249,6 +249,12 @@ class MyRequestsTracer():
 
             url = config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path
                                               + "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path + file_name, 1)
+
+            print("url=" + url)
+            print("config.svn_repo_parent_path=" + config.svn_repo_parent_path)
+            print("config.svn_baseline_rel_path" + config.svn_baseline_rel_path)
+            print("file_name" + file_name)
+
             propfind = self.delegate.request("PROPFIND", url,
                                              data='<?xml version="1.0" encoding="utf-8"?>'
                                                       '<propfind xmlns="DAV:">'

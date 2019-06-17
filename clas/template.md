@@ -61,4 +61,6 @@ Your contribution is either:
 that roughly matches the short description of the contribution, and put it in the clas/ directory.
 Use underscores for spaces, and keep the .md suffix. Keep the contents of the CLA as is.
 
-2. Include the newly created CLA in the PR as initiate the regular GitHub PR workflow.
+2. Include the newly created CLA in the PR and initiate the regular GitHub PR workflow.
+
+3. Repeat for any future Pull Requests.

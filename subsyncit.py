@@ -455,8 +455,9 @@ class Config(object):
 
 class State(object):
 
-    def __init__(self, db_dir):
+    def __init__(self, db_dir, files_table):
         self.online = False
+        self.files_table = files_table
         self.is_shutting_down = False
         self.db_dir = db_dir
         self.iteration = 0
@@ -1109,6 +1110,8 @@ def make_hidden_on_windows_too(path):
 
 
 def DELETEs(config, state, requests_session):
+    if debug_mode:
+        print("deleting????")
 
     start = time.time()
 
@@ -1117,20 +1120,25 @@ def DELETEs(config, state, requests_session):
     files_deleted = directories_deleted = 0
     for row in rows:
         fn = row['FN']
-        requests_delete = requests_session.delete(config.args.svn_url + esc(fn).replace(os.sep, "/"))
+        to_delete = config.args.svn_url + esc(fn).replace(os.sep, "/")
+        requests_delete = requests_session.delete(to_delete)
         if requests_delete.status_code != 204:
-            continue
+            if requests_delete.status_code == 404:
+                state.files_table.remove(Query().FN == fn)
+                continue
+            if debug_mode:
+                print("del: " + str(requests_delete.status_code) + " " + to_delete)
         output = requests_delete.text
         if ("\n<h1>Not Found</h1>\n" not in output) and str(output) != "":
-            print(("Unexpected on_deleted output for " + row['FN'] + " = [" + str(output) + "]"))
+            print(("Unexpected on_deleted output for " + fn + " = [" + str(output) + "]"))
             exit(10)
         if fn.endswith('/'):
             directories_deleted += 1
-            state.files_table.remove(Query().FN == row['FN'])
+            state.files_table.remove(Query().FN == fn)
             # TODO LIKE
         else:
             files_deleted += 1
-            state.files_table.remove(Query().FN == row['FN'])
+            state.files_table.remove(Query().FN == fn)
 
     speed = ", " + str(round((time.time() - start) / len(rows), 2)) + " secs per DELETE." if len(rows) > 0 else "."
 
@@ -1424,8 +1432,8 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
 
                 if config.args.do_file_system_scan:
                     scan_start_time = int(time.time())
-                    scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patterns)
-                    scan_for_any_missed_deletes(config, state)
+                    #scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patterns)
+                    #scan_for_any_missed_deletes(config, state)
                     state.last_scanned = scan_start_time
 
                 # Act on existing instructions (if any)
@@ -1521,10 +1529,9 @@ def main(argv):
     if not os.path.exists(config.db_dir):
         os.mkdir(config.db_dir)
 
-    state = State(config.db_dir)
 
     db = TinyDB(config.db_dir + os.sep + "subsyncit.db", storage=CachingMiddleware(JSONStorage))
-    state.files_table  = MyTinyDBTrace(db.table('files'))
+    state = State(config.db_dir, MyTinyDBTrace(db.table('files')))
 
     with open(config.db_dir + os.sep + "INFO.TXT", "w") as text_file:
         text_file.write(config.args.absolute_local_root_path + "is the Subsyncit path that this pertains to")

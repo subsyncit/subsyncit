@@ -250,10 +250,10 @@ class MyRequestsTracer():
             url = config.args.svn_url.replace(config.svn_repo_parent_path + config.svn_baseline_rel_path, config.svn_repo_parent_path
                                               + "!svn/rvr/" + youngest_rev + "/" + config.svn_baseline_rel_path + file_name, 1)
 
-            print("url=" + url)
-            print("config.svn_repo_parent_path=" + config.svn_repo_parent_path)
-            print("config.svn_baseline_rel_path" + config.svn_baseline_rel_path)
-            print("file_name" + file_name)
+            # print("url=" + url)
+            # print("config.svn_repo_parent_path=" + config.svn_repo_parent_path)
+            # print("config.svn_baseline_rel_path" + config.svn_baseline_rel_path)
+            # print("file_name" + file_name)
 
             propfind = self.delegate.request("PROPFIND", url,
                                              data='<?xml version="1.0" encoding="utf-8"?>'
@@ -553,11 +553,15 @@ class ExcludedPatternNames(object):
 class MakeDirOnSvnAndGetRevision():
 
     def revision_for_dir(self, requests_session, dir, config):
-        request = requests_session.mkcol(config.args.svn_url + dir.replace(os.sep, "/"))
+        svn_dir = config.args.svn_url + dir.replace(os.sep, "/")
+        request = requests_session.mkcol(svn_dir)
         rc = request.status_code
-        if rc == 201:
+        if rc == 201 or rc == 405:
+            if debug_mode:
+                print("MKCOL on " + svn_dir + " done, or not allowed")
             return requests_session.svn_revision(config, dir.replace(os.sep, "/"))
-        raise BaseException("Unexpected return code " + str(rc) + " for " + dir)
+
+        raise BaseException("Unexpected return code " + str(rc) + " for MKCOL on " + svn_dir)
 
 
 class GetDirRevisionsFromSvn():
@@ -576,9 +580,39 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
         self.file_system_watcher = file_system_watcher
         self.excluded_filename_patterns = excluded_patterns
 
+    def on_moved(self, event):
+        file_name = get_file_name(self.config, event.dest_path)
+        if debug_mode:
+            print("on_moved, created=" + file_name)
+        if file_name == "subsyncit.stop":
+            self.stop_subsyncit(event)
+            return
+        if self.excluded_filename_patterns.should_be_excluded(file_name):
+            return
+        if event.is_directory:
+            file_name += "/"
+        file_name = "/" + file_name
+        if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
+            return
+        self.local_adds_chgs_deletes_queue.add((file_name, "add"))
+
+        file_name = get_file_name(self.config, event.src_path)
+        if debug_mode:
+            print("on_moved, deleted=" + file_name)
+        if self.excluded_filename_patterns.should_be_excluded(file_name):
+            return
+        if event.is_directory:
+            file_name += "/"
+        file_name = "/" + file_name
+        if self.state.should_ignore_fs_events_for_this_for_nowʔ(file_name):
+            return
+        self.local_adds_chgs_deletes_queue.add((file_name, "delete"))
+
 
     def on_created(self, event):
         file_name = get_file_name(self.config, event.src_path)
+        if debug_mode:
+            print("on_created=" + file_name)
         if file_name == "subsyncit.stop":
             self.stop_subsyncit(event)
             return
@@ -606,6 +640,8 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def on_deleted(self, event):
         file_name = get_file_name(self.config, event.src_path)
+        if debug_mode:
+            print("on_deleted=" + file_name)
         if self.excluded_filename_patterns.should_be_excluded(file_name):
             return
         if event.is_directory:
@@ -618,6 +654,8 @@ class FileSystemNotificationHandler(PatternMatchingEventHandler):
 
     def on_modified(self, event):
         file_name = get_file_name(self.config, event.src_path)
+        if debug_mode:
+            print("on_modified=" + file_name)
         if file_name == "subsyncit.stop":
             self.stop_subsyncit(event)
             return
@@ -662,15 +700,22 @@ def make_directories_if_missing_in_db(config, state, dname, requests_session, re
         return 0
     dir = state.files_table.get(Query().FN == dname)
 
+    the_dirname = dirname(dname[:-1]) + "/"
+
+    if the_dirname == "//":
+        return dirs_made
+
+    if debug_mode:
+        print("make_directories_if_missing_in_db(), the_dirname = " + the_dirname + " from " + str(dname) + " ... " + dname[:-1])
     if not dir or dir['RV'] == 0:
-        parentname = dirname(dname[:-1]) + "/"
+        parentname = the_dirname
         if dirname != "/":
             parent = state.files_table.get(Query().FN == parentname)
             if not parent or parent['RV'] == 0:
                 dirs_made += make_directories_if_missing_in_db(config, state, parentname, requests_session, revision_getter)
 
     if not dir:
-        make_directories_if_missing_in_db(config, state, dirname(dname[:-1]) + "/", requests_session, revision_getter)
+        make_directories_if_missing_in_db(config, state, the_dirname, requests_session, revision_getter)
         dirs_made += 1
         print ("x TYPE: " + dname)
         dir = {'FN': dname,
@@ -679,7 +724,7 @@ def make_directories_if_missing_in_db(config, state, dname, requests_session, re
                'LS': None,
                'ST': 0,
                'I': None,
-               'RV': revision_getter.revision_for_dir(requests_session, dname, config)
+               'RV': revision_getter.revision_for_dir(requests_session, the_dirname, config)
                }
         state.files_table.insert(dir)
     elif dir['RV'] == 0:
@@ -687,7 +732,7 @@ def make_directories_if_missing_in_db(config, state, dname, requests_session, re
         state.files_table.update(
             {
                 'I': None,
-                'RV': revision_getter.revision_for_dir(requests_session, dname, config)
+                'RV': revision_getter.revision_for_dir(requests_session, the_dirname, config)
             },
             Query().FN == dname)
     return dirs_made
@@ -898,6 +943,7 @@ def get_svn_repo_parent_path(config, requests_session):
 
     return str([line for line in opts.splitlines() if ':activity-collection-set>' in line]).split(">")[2].split("!svn")[0]
 
+
 def write_error(db_dir, msg):
     subsyncit_err = db_dir + os.sep + "subsyncit.err"
     with open(subsyncit_err, "w") as text_file:
@@ -921,10 +967,18 @@ def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_
             # 'svn up' can add a file, causing watchdog to trigger an add notification .. to be ignored
             if row is None or row['RS'] is None:
                 upsert_row_in_table(state.files_table, file_name, instruction=PUT_ON_SERVER)
+        elif row is None:
+            if debug_mode:
+                print("row == None for file_name " + file_name + " action: " + action + "files==\n")
+                print_rows(state.files_table)
         elif action == "change":
             state.files_table.update({'I': PUT_ON_SERVER}, doc_ids=[row.doc_id])
+            if debug_mode:
+                print_rows("PUT_ON_SERVER" + str([row.doc_id]))
         elif action == "delete":
             state.files_table.update({'I': DELETE_ON_SERVER}, doc_ids=[row.doc_id])
+            if debug_mode:
+                print_rows("DELETE_ON_SERVER" + str([row.doc_id]))
         else:
             raise Exception("Unknown action " + action)
 
@@ -962,12 +1016,16 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
         file_name = get_file_name(config, entry.path)
         if file_name == "subsyncit.stop":
             state.is_shutting_down = True
+
         if state.is_shutting_down:
             break
+
         if to_add + to_change > 100:
             break
+
         if entry.stat().st_mtime < state.last_scanned:
             continue
+
         if excluded_filename_patterns.should_be_excluded(file_name):
             continue
 
@@ -1234,7 +1292,7 @@ def PUTs(config, state, requests_session):
                 except NotPUTtingAsTheServerObjected as e:
                     not_actually_changed += 1
                     if "txn-current-lock': Permission denied" in e.message:
-                        print("User lacks write permissions for " + file_name + ", and that may (I am not sure) be for the whole repo")
+                        print("User lacks write permissions for " + file_name + ", and that may be (I am not sure) the same for the whole repo")
                     else:
                         print(("Unexpected on_created output for " + file_name + " = [" + e.message + "]"))
                 if put_count == 100:
@@ -1273,6 +1331,8 @@ def GET_file(config, state, abs_local_file_path, old_sha1_should_be, file_name, 
     if os.path.exists(abs_local_file_path):
         local_sha1 = calculate_sha1_from_local_file(abs_local_file_path)
         if local_sha1 != old_sha1_should_be:
+            if debug:
+                print("Clash happening for " + abs_local_file_path + ", local_sha1=" + local_sha1 + ", old_sha1_should_be=" + old_sha1_should_be)
             clash_file_name = abs_local_file_path + ".clash_" + datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
             os.rename(abs_local_file_path, clash_file_name)
     with open(abs_local_file_path, 'wb') as f:
@@ -1327,7 +1387,8 @@ def GETs(config, state, requests_session):
             rows = state.files_table.search(Query().I == GET_FROM_SERVER)
             num_rows = len(rows)
             for row in rows:
-                # print ("row " + row['FN'])
+                if debug_mode:
+                    print ("more to do, row " + row['FN'] + "(get)")
                 (fc, dc) = GET(config, state, row, get_children, gets_list, requests_session)
                 file_count += fc
                 dir_count += dc
@@ -1391,6 +1452,7 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
     else:
         state.online = False
 
+debug_mode = True
 
 def main(argv):
 
@@ -1536,9 +1598,7 @@ def main(argv):
 
     db.close()
 
-    debug = False
-
-    if debug:
+    if debug_mode:
         print_rows(state.files_table)
 
 if __name__ == "__main__":

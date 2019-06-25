@@ -784,7 +784,10 @@ def local_deletes(config, state):
                 if file_name.endswith("/"):
                     file_name = file_name[:-1]
                 # parentGETʔ(state, dirname(file_name) + "/")
-            except OSError:
+            except OSError as e:
+                if "No such file or directory" in e.strerror:
+                    # Already deleted
+                    state.files_table.remove(Query().FN == file_name)
                 # has child dirs/files - shouldn't be deleted - can be on next pass.
                 continue
     finally:
@@ -975,11 +978,11 @@ def transform_enqueued_actions_into_instructions(config, state, local_adds_chgs_
         elif action == "change":
             state.files_table.update({'I': PUT_ON_SERVER}, doc_ids=[row.doc_id])
             if debug_mode:
-                print_rows("PUT_ON_SERVER" + str([row.doc_id]))
+                print("PUT_ON_SERVER" + str([row.doc_id]))
         elif action == "delete":
             state.files_table.update({'I': DELETE_ON_SERVER}, doc_ids=[row.doc_id])
             if debug_mode:
-                print_rows("DELETE_ON_SERVER" + str([row.doc_id]))
+                print("DELETE_ON_SERVER" + str([row.doc_id]))
         else:
             raise Exception("Unknown action " + action)
 
@@ -1024,8 +1027,8 @@ def scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patter
         if to_add + to_change > 100:
             break
 
-        if entry.stat().st_mtime < state.last_scanned:
-            continue
+        # if entry.stat().st_mtime < state.last_scanned:
+        #     continue
 
         if excluded_filename_patterns.should_be_excluded(file_name):
             continue
@@ -1110,8 +1113,6 @@ def make_hidden_on_windows_too(path):
 
 
 def DELETEs(config, state, requests_session):
-    if debug_mode:
-        print("deleting????")
 
     start = time.time()
 
@@ -1432,8 +1433,8 @@ def loop(config, state, excluded_filename_patterns, local_adds_chgs_deletes_queu
 
                 if config.args.do_file_system_scan:
                     scan_start_time = int(time.time())
-                    #scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patterns)
-                    #scan_for_any_missed_deletes(config, state)
+                    scan_for_any_missed_adds_and_changes(config, state, excluded_filename_patterns)
+                    scan_for_any_missed_deletes(config, state)
                     state.last_scanned = scan_start_time
 
                 # Act on existing instructions (if any)
